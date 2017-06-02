@@ -2,7 +2,7 @@
 ; sort-of generic template
 ; v0.6a2
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170602-0913
+; last modified 20170602-0936
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -56,15 +56,21 @@ post:
 ; *** set default CPU type ***
 	LDAA #'X'			; default 6800 installed
 	STAA fw_cpu			; store variable
-; ...but check it for real afterwards
+; ...but check it for real afterwards, at least rejecting 6809
 #include	"firmware/modules/cpu_check.s"
 
 ; *** preset kernel start address (standard label from ROM file) ***
 	LDX #kernel			; get full address
 	STX fw_warm			; store in sysvars, really needed?
 
-	LDX #IRQ_FREQ	; interrupts per second
-	STX irq_freq	; store speed...
+; *** preset SWI & NMI handlers ***
+	LDX #swi_routine	; standard routine/label?
+	STX fw_swi			; new sysvar
+; as NMI will be validated, no need to preinstall it!
+
+; interrupt frequency should be done via installed kernel!
+;	LDX #IRQ_FREQ	; interrupts per second
+;	STX irq_freq	; store speed...
 
 	LDX #ticks			; first address in uptime seconds AND ticks, assume contiguous
 res_sec:
@@ -72,23 +78,22 @@ res_sec:
 		INX					; next
 		CPX #ticks+5		; first invalid address
 		BNE res_sec			; continue until reached
+
+; KERAton has no VIA, jiffy IRQ is likely to be fixed on, perhaps enabling counter input on PIA
 ;	LDAA #$C0			; enable T1 (jiffy) interrupt only
 ;	STAA VIA_J + IER
-
 
 ; ******* debug code, direct print some string *******
 	LDX #fw_splash				; reset index
 fws_loop:
 		LDAA 0, X	; get char
 			BEQ fws_cr			; no more to print
-;		STX kern_ptr				; keep reg (not really needed)
-;		JSR $c0c2			; Eh output
-;		LDX					; restore index
+		STAA $0F			; visual 6800 output
 		INX					; next char
 		BRA fws_loop	
 fws_cr:
 	LDAA #LF				; trailing CR, needed by console!
-;	JSR $c0c2			; direct print
+	STAA $0F				; visual 6800 output
 ; ******* end of debug code **************************
 
 ; *** firmware ends, jump into the kernel ***
@@ -171,18 +176,18 @@ std_nmi:
 ; *** WILL change ABI/API ***REVISE
 fw_gestalt:
 ;6502
-	LDA himem		; get pages of kernel SRAM (4)
-	STA zpar		; store output (3)
-	_STZX zpar+2	; no bankswitched RAM yet (4)
-	_STZX zpar3+2	; same for string address (4)
-	LDA #>fw_mname	; get string pointer
-	LDY #<fw_mname
-	STA zpar3+1		; put it outside
-	STY zpar3
-	LDA #SPEED_CODE	; speed code as determined in options.h (2+3)
-	STA zpar2
-	LDA fw_cpu		; get kind of CPU (previoulsy stored or determined) (4+3)
-	STA zpar2+2
+;	LDA himem		; get pages of kernel SRAM (4)
+;	STA zpar		; store output (3)
+;	_STZX zpar+2	; no bankswitched RAM yet (4)
+;	_STZX zpar3+2	; same for string address (4)
+;	LDA #>fw_mname	; get string pointer
+;	LDY #<fw_mname
+;	STA zpar3+1		; put it outside
+;	STY zpar3
+;	LDA #SPEED_CODE	; speed code as determined in options.h (2+3)
+;	STA zpar2
+;	LDA fw_cpu		; get kind of CPU (previoulsy stored or determined) (4+3)
+;	STA zpar2+2
 	_DR_OK			; done (8)
 
 ; SET_ISR, set IRQ vector
@@ -199,22 +204,25 @@ fw_s_isr:
 ; might check whether the pointed code starts with the magic string
 ; no need to disable interrupts as a partially set pointer would be rejected
 fw_s_nmi:
-;6502
+	LDX kerntab			; get pointer to supplied code + magic string
 #ifdef	SAFE
-	LDX #3					; offset to reversed magic string
-	LDY #0					; reset supplied pointer
-fw_sn_chk:
-		LDA (kerntab), Y		; get pointed handler string char
-		CMP fw_magic, X			; compare against reversed string
-		BEQ fw_sn_ok			; no problem this far...
-			_DR_ERR(CORRUPT)		; ...or invalid NMI handler
-fw_sn_ok:
-		INY						; try next one
-		DEX
-		BPL fw_sn_chk			; until all done
+	LDAA 0, X			; first char
+	CMPA #'U'			; is it correct? TBD
+		BNE fsn_err			; not!
+	LDAA 1, X			; second char
+	CMPA #'N'			; correct?
+		BNE fsn_err			; not!
+	LDAA 2, X			; third char
+	CMPA #'j'			; correct?
+		BNE fsn_err			; not!
+	LDAA 3, X			; last char
+	CMPA #'*'			; correct?
+	BEQ fsn_valid		; yeah, proceed!
+fsn_err:
+		_DR_ERR(CORRUPT)		; ...or invalid NMI handler
+fsn_valid:
 #endif
 ; transfer supplied pointer to firmware vector
-	LDX kerntab				; get pointer
 	STX fw_nmi				; store for firmware
 	_DR_OK					; done (8)
 
@@ -239,24 +247,28 @@ fw_i_src:
 ; *** hardware specific ***
 
 ; POWEROFF, poweroff etc
-; Y <- mode (0 = suspend, 2 = warmboot, 4 = coldboot, 6 = poweroff)
+; B <- mode (0 = suspend, 2 = warmboot, 4 = coldboot, 6 = poweroff)
 ; C -> not implemented
 fw_power:
-;6502
-	TYA					; get subfunction offset
-	TAX					; use as index
-	_JMPX(fwp_func)		; select from jump table
-
-; 6800 already
-fwp_off:
-	_PANIC("{OFF}")		; just in case is handled
-
-fwp_cold:
-	LDX $FFFE			; 6800 RES vector
-	JMP 0, X			; go!
-
-fwp_susp:
-	_DR_OK				; just continue execution
+	TSTB				; is it zero?
+	BNE fwp_ns			; not suspend
+; this would be suspend code...
+fwp_exit:
+		_DR_OK				; just continue execution
+fwp_ns:
+	CMPB #2				; warm?
+	BNE fwp_nw			; not
+		LDX fw_warm			; get restart vector
+		JMP 0, X			; warm boot!
+fwp_nw:
+	CMPB #4				; cold?
+	BNE fwp_nc			; not
+		LDX $FFFE			; 6800 RES vector
+		JMP 0, X			; go!
+fwp_nc:
+	CMPB #6				; off?
+	BNE fwp_exit			; not recognised
+		_PANIC("{OFF}")		; just in case is handled
 
 ; FREQ_GEN, frequency generator hardware interface, TBD
 fw_fgen:
@@ -306,38 +318,6 @@ fwp_func:
 	.word	fwp_cold	; coldboot	+FW_COLD
 	.word	fwp_off		; poweroff	+FW_OFF
 
-; *********************************
-; *** administrative jump table *** changing
-; *********************************
-fw_admin:
-; generic functions, esp. interrupt related
-	.word	fw_gestalt	; GESTALT get system info (renumbered)
-	.word	fw_s_isr	; SET_ISR set IRQ vector
-	.word	fw_s_nmi	; SET_NMI set (magic preceded) NMI routine
-	.word	fw_s_brk	; *** SET_BRK set debugger, new 20170517
-	.word	fw_jiffy	; *** JIFFY set jiffy IRQ speed, ** TBD **
-	.word	fw_i_src	; *** IRQ_SOURCE get interrupt source in X for total ISR independence
-
-; pretty hardware specific
-	.word	fw_power	; POWEROFF power-off, suspend or cold boot
-	.word	fw_fgen		; *** FREQ_GEN frequency generator hardware interface, TBD
-
-; not for LOWRAM systems
-	.word	fw_install	; INSTALL copy jump table
-	.word	fw_patch	; PATCH patch single function (renumbered)
-	.word	fw_ctx		; *** CONTEXT context bankswitching
-
-; *** minimOS BRK handler *** might go elsewhere
-brk_hndl:		; label from vector list
-; much like the ISR start
-	PHA						; save registers
-	_PHX
-	_PHY
-	JSR brk_handler			; standard label from IRQ
-	_PLY					; restore status and return
-	_PLX
-	PLA
-	RTI
 
 ; if case of no headers, at least keep machine name somewhere
 #ifdef	NOHEAD
@@ -349,45 +329,72 @@ fw_mname:
 
 ; filling for ready-to-blow ROM
 #ifdef		ROM
-	.dsb	kernel_call-*, $FF
+	.dsb	admin_ptr-*, $FF
 #endif
 
-; *** minimOS·65 function call WRAPPER ($FFC0) ***
-* = kernel_call
-cop_hndl:		; label from vector list
-	_JMPX(fw_table)		; the old fashioned way
+; *********************************
+; *** administrative jump table ***
+; *********************************
 
-; filling for ready-to-blow ROM
-#ifdef		ROM
-	.dsb	admin_call-*, $FF
+* = admin_ptr
+
+; generic functions, esp. interrupt related
+	JMP fw_gestalt	; GESTALT get system info (renumbered)
+	JMP fw_s_isr	; SET_ISR set IRQ vector
+	JMP fw_s_nmi	; SET_NMI set (magic preceded) NMI routine
+	JMP fw_s_brk	; *** SET_BRK set debugger, new 20170517
+	JMP fw_jiffy	; *** JIFFY set jiffy IRQ speed, ** TBD **
+	JMP fw_i_src	; *** IRQ_SOURCE get interrupt source for total ISR independence
+
+; pretty hardware specific
+	JMP fw_power	; POWEROFF power-off, suspend or cold boot
+	JMP fw_fgen		; *** FREQ_GEN frequency generator hardware interface, TBD
+
+#ifndef	LOWRAM
+; not for LOWRAM systems
+	JMP fw_install	; INSTALL copy jump table
+	JMP fw_patch	; PATCH patch single function (renumbered)
+	JMP fw_ctx		; *** CONTEXT context bankswitching
 #endif
-
-; *** administrative meta-kernel call primitive ($FFD0) ***
-* = admin_call
-	_JMPX(fw_admin)		; takes 5 clocks
-
-
-; *** vectored IRQ handler ***
-; might go elsewhere, especially on NMOS systems
-irq:
-	JMP (fw_isr)	; vectored ISR (6)
 
 ; filling for ready-to-blow ROM
 #ifdef	ROM
 	.dsb	lock-*, $FF
 #endif
 
-; ********** Standard ROM vectors **********
+; ****************************
+; *** Standard ROM vectors ***
+; ****************************
+
 ; *** panic routine, locks at very obvious address ($FFE1-$FFE2) ***
 * = lock
 	NOP					; locks at same address as 6502
 panic_loop:
 	BRA panic_loop	; always OK
 
+; ****** use some space for interrupt handlers ******
+; *** vectored IRQ handler *** $FFE3
+; might go elsewhere
+irq:
+	LDX fw_isr			; vectored ISR
+	JMP 0, X			; MUST end in RTI
+
+; *** minimOS BRK handler *** %FFE8
+; might go elsewhere
+brk_hndl:		; label from vector list
+	LDX fw_brk			; get vectored pointer
+	JMP 0, X			; MUST end in RTI
+
+; $FFED...
+
 ; filling for ready-to-blow ROM
 #ifdef	ROM
 	.dsb	$FFEE-*, $FF
 #endif
+
+; **********************************
+; ****** hardware ROM vectors ******
+; **********************************
 
 ; *** Hitachi ROM vectors ***
 * = $FFEE				; should be already at it
