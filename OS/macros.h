@@ -1,11 +1,11 @@
-; minimOS·63 0.6a1 MACRO definitions
+; minimOS·63 0.6a2 MACRO definitions
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170601-1238
+; last modified 20170602-1405
 
 ; *** standard addresses ***
 
 kern_ptr	=	$FC		; pointer to jump table, routines ending in RTS
-admin_ptr	=	$FFD0	; fixed jump table, routines ending in RTS, intended for kernel/drivers ONLY
+admin_ptr	=	$FFC0	; NEW fixed jump table, routines ending in RTS, intended for kernel/drivers ONLY
 
 ; unified address (will lock at $FFE1-2 anyway)
 lock		=	$FFE0	; just after the above

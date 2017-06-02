@@ -2,7 +2,7 @@
 ; sort-of generic template
 ; v0.6a2
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170602-0936
+; last modified 20170602-1406
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -276,8 +276,8 @@ fw_fgen:
 	_DR_ERR(UNAVAIL)	; not yet implemented
 
 ; *** for higher-specced systems ***
-
 #ifndef	LOWRAM
+
 ; INSTALL, copy jump table
 ; kerntab <- address of supplied jump table
 fw_install:
@@ -304,20 +304,28 @@ fw_patch:
 	STA fw_table+1, Y
 	_EXIT_CS				; restore interrupts and sizes (4)
 	_DR_OK					; done (8)
+
 #else
+; these functions will not work on 128-byte systems!
 fw_install:
 fw_patch:
 fw_ctx:
 	_DR_ERR(UNAVAIL)	; not yet implemented
+
 #endif
 
-; sub-function jump table (eeeek)
+; ****************************
+; *** some firmware tables ***
+; ****************************
+
+; power sub-function pointer table (eeeek)
 fwp_func:
 	.word	fwp_susp	; suspend	+FW_STAT
 	.word	kernel		; shouldn't use this, just in case
 	.word	fwp_cold	; coldboot	+FW_COLD
 	.word	fwp_off		; poweroff	+FW_OFF
 
+; ****** some odds ******
 
 ; if case of no headers, at least keep machine name somewhere
 #ifdef	NOHEAD
@@ -339,32 +347,34 @@ fw_mname:
 * = admin_ptr
 
 ; generic functions, esp. interrupt related
-	JMP fw_gestalt	; GESTALT get system info (renumbered)
-	JMP fw_s_isr	; SET_ISR set IRQ vector
-	JMP fw_s_nmi	; SET_NMI set (magic preceded) NMI routine
-	JMP fw_s_brk	; *** SET_BRK set debugger, new 20170517
-	JMP fw_jiffy	; *** JIFFY set jiffy IRQ speed, ** TBD **
-	JMP fw_i_src	; *** IRQ_SOURCE get interrupt source for total ISR independence
+	JMP fw_gestalt	; GESTALT get system info (renumbered) @0
+	JMP fw_s_isr	; SET_ISR set IRQ vector +3
+	JMP fw_s_nmi	; SET_NMI set (magic preceded) NMI routine +6
+	JMP fw_s_brk	; *** SET_BRK set debugger, new 20170517 +9
+	JMP fw_jiffy	; *** JIFFY set jiffy IRQ speed, ** TBD ** +C
+	JMP fw_i_src	; *** IRQ_SOURCE get interrupt source for total ISR independence +F
 
 ; pretty hardware specific
-	JMP fw_power	; POWEROFF power-off, suspend or cold boot
-	JMP fw_fgen		; *** FREQ_GEN frequency generator hardware interface, TBD
+	JMP fw_power	; POWEROFF power-off, suspend or cold boot +12
+	JMP fw_fgen		; *** FREQ_GEN frequency generator hardware interface, TBD +15
 
 #ifndef	LOWRAM
 ; not for LOWRAM systems
-	JMP fw_install	; INSTALL copy jump table
-	JMP fw_patch	; PATCH patch single function (renumbered)
-	JMP fw_ctx		; *** CONTEXT context bankswitching
+	JMP fw_install	; INSTALL copy jump table +18
+	JMP fw_patch	; PATCH patch single function (renumbered) +1B
+	JMP fw_ctx		; *** CONTEXT context bankswitching +1E
 #endif
+
+; ****** at the NEW standard address $FFC0, this will be at $FFDE ******
 
 ; filling for ready-to-blow ROM
 #ifdef	ROM
 	.dsb	lock-*, $FF
 #endif
 
-; ****************************
-; *** Standard ROM vectors ***
-; ****************************
+; *****************************
+; *** standard ROM inteface ***
+; *****************************
 
 ; *** panic routine, locks at very obvious address ($FFE1-$FFE2) ***
 * = lock
