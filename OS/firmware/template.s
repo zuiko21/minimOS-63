@@ -1,8 +1,8 @@
 ; firmware for minimOS-63
 ; sort-of generic template
-; v0.6a1
+; v0.6a2
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170601-1743
+; last modified 20170602-0913
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -156,22 +156,36 @@ std_nmi:
 #include "firmware/modules/std_nmi.s"
 
 
+; ********************************
 ; *** administrative functions ***
-; install jump table
-; kerntab <- address of supplied jump table
-fw_install:
-	_ENTER_CS			; disable interrupts! (5)
-	LDY #0				; reset index (2)
-fwi_loop:
-		LDA (kerntab), Y	; get word from table as supplied (5)
-		STA fw_table, Y		; copy where the firmware expects it (4)
-		INY					; advance one byte
-		BNE fwi_loop		; until whole page is done (3/2)
-	_EXIT_CS			; restore interrupts if needed, will restore size too (4)
-	_DR_OK				; all done (8)
+; ********************************
 
+; *** generic functions ***
 
-; set IRQ vector
+; GESTALT, get system info, API TBD
+; zpar -> available pages of (kernel) SRAM
+; zpar+2.W -> available BANKS of RAM
+; zpar2.B -> speedcode
+; zpar2+2.B -> CPU type
+; zpar3.W/L -> points to a string with machine name
+; *** WILL change ABI/API ***REVISE
+fw_gestalt:
+;6502
+	LDA himem		; get pages of kernel SRAM (4)
+	STA zpar		; store output (3)
+	_STZX zpar+2	; no bankswitched RAM yet (4)
+	_STZX zpar3+2	; same for string address (4)
+	LDA #>fw_mname	; get string pointer
+	LDY #<fw_mname
+	STA zpar3+1		; put it outside
+	STY zpar3
+	LDA #SPEED_CODE	; speed code as determined in options.h (2+3)
+	STA zpar2
+	LDA fw_cpu		; get kind of CPU (previoulsy stored or determined) (4+3)
+	STA zpar2+2
+	_DR_OK			; done (8)
+
+; SET_ISR, set IRQ vector
 ; kerntab <- address of ISR
 fw_s_isr:
 	_ENTER_CS				; disable interrupts and save sizes!
@@ -180,12 +194,12 @@ fw_s_isr:
 	_EXIT_CS				; restore interrupts if needed
 	_DR_OK					; done (8)
 
-
-; set NMI vector
+; SET_NMI, set NMI vector
 ; kerntab <- address of NMI code (including magic string)
 ; might check whether the pointed code starts with the magic string
 ; no need to disable interrupts as a partially set pointer would be rejected
 fw_s_nmi:
+;6502
 #ifdef	SAFE
 	LDX #3					; offset to reversed magic string
 	LDY #0					; reset supplied pointer
@@ -204,54 +218,36 @@ fw_sn_ok:
 	STX fw_nmi				; store for firmware
 	_DR_OK					; done (8)
 
-; patch single function
-; kerntab <- address of code
-; Y <- function to be patched
-fw_patch:
-#ifdef		LOWRAM
-	_DR_ERR(UNAVAIL)		; no way to patch on 128-byte systems
-#else
-	_ENTER_CS				; disable interrupts and save sizes! (5)
-	LDA kerntab				; get full pointer
-	LDX kerntab+1
-	STA fw_table, Y			; store into firmware
-	TXA
-	STA fw_table+1, Y
-	_EXIT_CS				; restore interrupts and sizes (4)
-	_DR_OK					; done (8)
-#endif
+; SET_BRK, set BRK handler
+; kerntab <- address of BRK code
+fw_s_brk:
+	_ENTER_CS				; disable interrupts!
+	LDX kerntab				; get pointer
+	STX fw_brk				; store for firmware
+	_EXIT_CS				; restore interrupts if needed
+	_DR_OK					; done
 
+; JIFFY, set jiffy IRQ frequency
+fw_jiffy:
+; ****** TO BE DONE ******
 
-; get system info, API TBD
-; zpar -> available pages of (kernel) SRAM
-; zpar+2.W -> available BANKS of RAM
-; zpar2.B -> speedcode
-; zpar2+2.B -> CPU type
-; zpar3.W/L -> points to a string with machine name
-; *** WILL change ABI/API ***REVISE
-fw_gestalt:
-	LDA himem		; get pages of kernel SRAM (4)
-	STA zpar		; store output (3)
-	_STZX zpar+2	; no bankswitched RAM yet (4)
-	_STZX zpar3+2	; same for string address (4)
-	LDA #>fw_mname	; get string pointer
-	LDY #<fw_mname
-	STA zpar3+1		; put it outside
-	STY zpar3
-	LDA #SPEED_CODE	; speed code as determined in options.h (2+3)
-	STA zpar2
-	LDA fw_cpu		; get kind of CPU (previoulsy stored or determined) (4+3)
-	STA zpar2+2
-	_DR_OK			; done (8)
+; IRQ_SOURCE, get source of interrupt
+fw_i_src:
+; ****** TO BE DONE ******
+	_DR_ERR(UNAVAIL)	; not yet implemented
 
-; poweroff etc
+; *** hardware specific ***
+
+; POWEROFF, poweroff etc
 ; Y <- mode (0 = suspend, 2 = warmboot, 4 = coldboot, 6 = poweroff)
 ; C -> not implemented
 fw_power:
+;6502
 	TYA					; get subfunction offset
 	TAX					; use as index
 	_JMPX(fwp_func)		; select from jump table
 
+; 6800 already
 fwp_off:
 	_PANIC("{OFF}")		; just in case is handled
 
@@ -262,14 +258,46 @@ fwp_cold:
 fwp_susp:
 	_DR_OK				; just continue execution
 
-; *** temporary labels for unimplemented functions ***
-fw_s_brk:
-fw_jiffy:
-fw_i_src:
+; FREQ_GEN, frequency generator hardware interface, TBD
 fw_fgen:
+; ****** TO BE DONE ******
+	_DR_ERR(UNAVAIL)	; not yet implemented
+
+; *** for higher-specced systems ***
+
+#ifndef	LOWRAM
+; INSTALL, copy jump table
+; kerntab <- address of supplied jump table
+fw_install:
+;6502
+	_ENTER_CS			; disable interrupts! (5)
+	LDY #0				; reset index (2)
+fwi_loop:
+		LDA (kerntab), Y	; get word from table as supplied (5)
+		STA fw_table, Y		; copy where the firmware expects it (4)
+		INY					; advance one byte
+		BNE fwi_loop		; until whole page is done (3/2)
+	_EXIT_CS			; restore interrupts if needed, will restore size too (4)
+	_DR_OK				; all done (8)
+
+; PATCH, patch single function
+; kerntab <- address of code
+; Y <- function to be patched
+fw_patch:
+	_ENTER_CS				; disable interrupts and save sizes! (5)
+	LDA kerntab				; get full pointer
+	LDX kerntab+1
+	STA fw_table, Y			; store into firmware
+	TXA
+	STA fw_table+1, Y
+	_EXIT_CS				; restore interrupts and sizes (4)
+	_DR_OK					; done (8)
+#else
+fw_install:
+fw_patch:
 fw_ctx:
 	_DR_ERR(UNAVAIL)	; not yet implemented
-; *** end of temporary labels ***
+#endif
 
 ; sub-function jump table (eeeek)
 fwp_func:
