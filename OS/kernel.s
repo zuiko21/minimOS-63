@@ -1,7 +1,7 @@
-; minimOS generic Kernel
-; v0.6a4
-; (c) 2012-2017 Carlos J. Santisteban
-; last modified 20170531-1033
+; minimOS-63 generic Kernel
+; v0.6a1
+; (c) 2017 Carlos J. Santisteban
+; last modified 20170604-2220
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -35,7 +35,7 @@ kern_head:
 	.asc	"****", 13		; flags TBD
 	.asc	"kernel", 0		; filename
 kern_splash:
-	.asc	"minimOS 0.6a4", 0	; version in comment
+	.asc	"minimOS-63 0.6a1", 0	; version in comment
 
 	.dsb	kern_head + $F8 - *, $FF	; padding
 
@@ -53,51 +53,31 @@ kern_siz = kern_end - kern_head - $FF
 
 warm:
 	SEI				; interrupts off, just in case (2)
-	CLD				; just in case, a must for NMOS (2)
 
-; * this is in case a 65816 is being used, but still compatible with all * EXCEPT Kowlaski
-#ifdef	C816
-#ifdef	SAFE
-	SEC				; would set back emulation mode on C816
-	.byt	$FB		; XCE on 816, NOP on C02, but illegal 'ISC $0005, Y' on NMOS!
-	ORA $0			; the above would increment some random address in zeropage (NMOS) but this one is inocuous on all CMOS
-#endif
-#endif
-; * end of 65816 specific code *
-
-; assume interrupts off, binary mode and 65C816 in emulation mode!
-; install kernel jump table if not previously loaded, NOT for 128-byte systems
-#ifndef	LOWRAM
-; ++++++
+; install kernel jump table if not previously loaded
 #ifndef		DOWNLOAD
-	LDY #<k_vec			; get table address, nicer way (2+2)
-	LDA #>k_vec
-	STY ex_pt			; store parameter (3+3)
-	STA ex_pt+1
-	_ADMIN(INSTALL)		; copy jump table (14...)
-#endif
-; ++++++
+	LDX #k_vec			; get table address
+	STX ex_pt			; store parameter
+	_ADMIN(INSTALL)		; copy jump table
 #endif
 
 ; install ISR code (as defined in "isr/irq.s" below)
-	LDY #<k_isr			; get address, nicer way (2+2)
-	LDA #>k_isr
-	STY ex_pt			; no need to know about actual vector location (3)
-	STA ex_pt+1
-	_ADMIN(SET_ISR)		; install routine (14...)
+	LDX #k_isr			; get address
+	STX ex_pt			; no need to know about actual vector location
+	_ADMIN(SET_ISR)		; install routine
 
 ; Kernel no longer supplies default NMI, but could install it otherwise
 
 ; *** default action in case the scheduler runs out of tasks ***
-	LDA #PW_STAT		; default action upon complete task death
-	STA sd_flag			; this is important to be clear (PW_STAT) or set as proper error handler
+	LDA A #PW_STAT		; default action upon complete task death
+	STA A sd_flag			; this is important to be clear (PW_STAT) or set as proper error handler
 
 ; *****************************
 ; *** memory initialisation ***
 ; *****************************
 
 ; this should take a basic memory map from firmware, perhaps via the GESTALT function
-
+;6502************************************************
 #ifndef		LOWRAM
 ; ++++++
 	LDY #FREE_RAM		; get status of whole RAM
@@ -422,25 +402,23 @@ dr_ok:					; *** all drivers inited ***
 ; **********************************
 
 ; in case no I/O lock arrays were initialised... only for LOWRAM
+;6800**************************6800
 #ifdef	LOWRAM
-	_STZA cin_mode		; single flag for non-multitasking systems
+	CLR cin_mode		; single flag for non-multitasking systems
 #endif
 
 ; startup code, revise ASAP
 ; *** set default I/O device ***
-	LDA #DEVICE			; as defined in options.h
-	STA default_out		; should check some devices
-	STA default_in
+	LDX #DEVICE*257			; as defined in options.h
+	STX default_in		; set word
 
 ; *** interrupt setup no longer here, firmware did it! *** 20150605
 
 ; new, show a splash message ever the kernel is restarted!
 	JSR ks_cr			; leading newline
-	LDY #<kern_splash	; get pointer
-	LDA #>kern_splash
-	STY str_pt			; set parameter
-	STA str_pt+1
-	LDY #DEVICE			; eeeeeek
+	LDX #kern_splash	; get pointer
+	STX str_pt			; set parameter
+	LDA B #DEVICE			; eeeeeek
 	_KERNEL(STRING)		; print it!
 	JSR ks_cr			; trailing newline
 
@@ -448,25 +426,22 @@ dr_ok:					; *** all drivers inited ***
 ; **** launch monitor/shell ****
 ; ******************************
 sh_exec:
-	LDY #<shell			; get pointer to built-in shell
-	LDA #>shell			; as per mandatory label, no header to skip!
-	STY ex_pt			; set execution address
-	STA ex_pt+1
-	LDA #DEVICE			; *** revise
-	STA def_io			; default local I/O
-	STA def_io+1
+	LDX #shell			; get pointer to built-in shell
+	STX ex_pt			; set execution address
+	LDX #DEVICE*257			; *** revise
+	STX def_io			; default local I/O
 	_KERNEL(B_FORK)		; reserve first execution braid, no direct call as could be PATCHED!
 	_KERNEL(B_EXEC)		; go for it! no direct call as could be PATCHED!
 ; singletask systems will not arrive here, ever!
 	_KERNEL(B_YIELD)	; ** get into the working code ASAP! ** no direct call as could be PATCHED!
 here:
-	_BRA here			; ...as the scheduler will detour execution
+	BRA here			; ...as the scheduler will detour execution
 
 ; a quick way to print a newline on standard device
 ks_cr:
-	LDA #CR				; leading newline
-	STA io_c
-	LDY #DEVICE
+	LDA A #CR			; leading newline
+	STA A io_c
+	LDA B #DEVICE
 	_KERNEL(COUT)		; print it
 	RTS
 
@@ -493,7 +468,7 @@ k_isr:
 ; in headerless builds, keep at least the splash string
 #ifdef	NOHEAD
 kern_splash:
-	.asc	"minimOS 0.6a4", 0
+	.asc	"minimOS-63 0.6a1", 0
 #endif
 
 kern_end:		; for size computation

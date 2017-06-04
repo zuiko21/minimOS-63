@@ -1,3 +1,4 @@
+; minimOS-63 firmware module
 ; 6800 code snippet in order to reject a 6809 CPU
 ; updated to tell Hitachi and other microcontrrollers!
 ; v0.6b1

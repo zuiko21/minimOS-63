@@ -1,7 +1,7 @@
-; minimOS generic Kernel API for LOWRAM systems
-; v0.6a7
-; (c) 2012-2017 Carlos J. Santisteban
-; last modified 20170531-1153
+; minimOS-63 generic Kernel API for LOWRAM systems
+; v0.6a1
+; (c) 2017 Carlos J. Santisteban
+; last modified 20170604-2210
 
 ; *** dummy function, non implemented ***
 unimplemented:		; placeholder here, not currently used
@@ -29,7 +29,7 @@ pqmanage:
 ; *** COUT, output a character ***
 ; ********************************
 ;		INPUT
-; Y		= dev
+; acc B		= dev
 ; io_c	= char
 ;		OUTPUT
 ; C = I/O error
@@ -39,6 +39,7 @@ cio_of = da_ptr			; parameter switching between CIN and COUT
 ; da_ptr globally defined, cio_of not needed upon calling dr_call!
 
 cout:
+;6502******************************************************************
 	LDA #D_COUT			; only difference from cin (2)
 	STA cio_of			; store for further indexing (3)
 	TYA					; for indexed comparisons (2)
@@ -80,7 +81,7 @@ cio_dev:
 ; *** CIN,  get a character ***
 ; *****************************
 ;		INPUT
-; Y = dev
+; acc B	= dev
 ;		OUTPUT
 ; io_c	= char
 ; C		= not available
@@ -88,6 +89,7 @@ cio_dev:
 ; cin_mode is a kernel variable
 
 cin:
+;6502******************************************************************
 	LDA #D_CIN			; only difference from cout
 	STA cio_of			; store for further addition
 	TYA					; for indexed comparisons
@@ -153,14 +155,14 @@ ci_rnd:
 ;		INPUT
 ; w_rect	= 16b size VV.HH
 ; w_rect+2	= 16b pos VV.HH
-; str_pt	= 24b pointer to title string, NONE yet used
+; str_pt	= pointer to title string, NONE yet used
 ;		OUTPUT
-; Y = dev
-; C = not supported/not available
+; acc B	= dev
+; C	= not supported/not available
 
 open_w:
-	LDA w_rect			; asking for some size?
-	ORA w_rect+1
+	LDA A w_rect			; asking for some size?
+	ORA A w_rect+1
 	BEQ ow_no_window	; wouldn't do it
 		_ERR(NO_RSRC)
 
@@ -169,7 +171,7 @@ open_w:
 ; *** B_FORK, reserve available PID ***
 ; *************************************
 ;		OUTPUT
-; Y = PID (0 means singletask system)
+; acc B = PID (0 means singletask system)
 ; *********************************************
 ; *** B_YIELD, Yield CPU time to next braid ***
 ; *********************************************
@@ -179,12 +181,12 @@ open_w:
 ; *** FREE_W, release window, will be closed by kernel ***
 ; ********************************************************
 ;		INPUT
-; Y = dev
+; acc B = dev
 
 ow_no_window:
 get_pid:
 b_fork:
-	LDY #0				; no multitasking, system reserved PID
+	LDA B #0			; no multitasking, system reserved PID
 yield:
 close_w:
 free_w:
@@ -197,9 +199,9 @@ free_w:
 ;		OUTPUT
 ; up_ticks	= 16b ticks, new standard format 20161006
 ; up_sec	= 32b uptime in seconds
-; new version is 22b / 113t
 
 uptime:
+;6502******************************************************************
 	LDX #7				; end of destination offset (2)
 	LDY #5				; end of source pointer (2)
 	_ENTER_CS			; do not change while copying (5)
@@ -221,13 +223,15 @@ up_nosec:
 ; *** B_EXEC, launch new loaded process ***
 ; *****************************************
 ;		INPUT
-; Y			= PID (0 for singletask only)
+; acc B		= PID (0 for singletask only)
 ; ex_pt		= execution pointer
 ; def_io	= 16b default std_in (LSB) & stdout (MSB)
 ;
 ; API still subject to change... (rendez-vous mode TBD)
 
 b_exec:
+;6502******************************************************************
+
 ; non-multitasking version
 #ifdef	SAFE
 	TYA					; should be system reserved PID, best way
@@ -277,9 +281,10 @@ ex_jmp:
 ; **************************************************
 ;		INPUT
 ; b_sig	= signal to be sent
-; Y		= PID (0 means TO ALL)
+; acc B	= PID (0 means TO ALL)
 
 signal:
+;6502******************************************************************
 #ifdef	SAFE
 	TYA					; check correct PID, really needed?
 		BNE sig_pid			; strange error?
@@ -304,17 +309,17 @@ sig_pid:
 ; *** B_STATUS, get execution flags of a braid ***
 ; ************************************************
 ;		INPUT
-; Y = addressed braid
+; acc B	= addressed braid
 ;		OUTPUT
-; Y = flags ***TBD
-; C = invalid PID
+; acc B	= flags ***TBD
+; C	= invalid PID
 
 status:
 #ifdef	SAFE
-	TYA					; check PID
+	TST B					; check PID
 		BNE sig_pid			; only 0 accepted
 #endif
-	LDY #BR_RUN			; single-task systems are always running
+	LDA B #BR_RUN			; single-task systems are always running
 sig_exit:
 	_EXIT_OK
 
@@ -323,20 +328,18 @@ sig_exit:
 ; *** SET_HNDL, set SIGTERM handler, default is like SIGKILL ***
 ; **************************************************************
 ;		INPUT
-; Y		= PID (0 means to myself)
-; ex_pt = SIGTERM handler routine (ending in RTI!)
+; acc B	= PID (0 means to myself)
+; ex_pt = SIGTERM handler routine (ending in RTI?)
 ;		OUTPUT
 ; C = bad PID
 
 set_handler:
 #ifdef	SAFE
-	TYA					; check PID
+	TST B				; check PID
 		BNE sig_pid			; only 0 accepted
 #endif
-	LDY ex_pt			; get pointer
-	LDA ex_pt+1			; get pointer MSB
-	STY mm_sterm		; store in single variable (from unused table)
-	STA mm_sterm+1
+	LDX ex_pt			; get pointer
+	STX mm_sterm		; store in single variable (from unused table)
 	_EXIT_OK
 
 
@@ -350,6 +353,7 @@ set_handler:
 ;		USES rh_scan
 
 load_link:
+;6502******************************************************************
 ; *** look for that filename in ROM headers ***
 ; first of all, correct parameter pointer as will be aligned with header!
 	LDA str_pt			; get LSB
@@ -443,13 +447,14 @@ ll_wrap:
 ; *** STRING, prints a C-string ***
 ; *********************************
 ;		INPUT
-; Y			= dev
-; str_pt	= 24b pointer to string (might be altered!) 24-bit ready!
+; acc B		= dev
+; str_pt	= pointer to string
 ;		OUTPUT
 ; C = device error
 ;		USES iol_dev and whatever COUT takes
 
 string:
+;6502******************************************************************
 	STY iol_dev			; save Y
 	LDY #0				; reset new index
 	LDA str_pt+1		; get older MSB in case it changes
@@ -484,12 +489,13 @@ str_exit:
 ; *** READLN, buffered input *** new 20161223
 ; ******************************
 ;		INPUT
-; Y			= dev
+; acc B		= dev
 ; str_pt	= buffer address
 ; ln_siz	= max offset (byte)
 ;		USES rl_dev, rl_cur and whatever CIN takes
 
 readLN:
+;6502******************************************************************
 	STY rl_dev			; preset device ID!
 	_STZY rl_cur		; reset variable
 rl_l:
@@ -544,6 +550,7 @@ rl_cr:
 ; should also be Phi2-rate independent... input as Hz, or 100uS steps?
 ; *******TO BE REVISED*********
 set_fg:
+;6502******************************************************************
 	LDA zpar
 	ORA zpar+1
 		BEQ fg_dis		; if zero, disable output
@@ -582,28 +589,30 @@ fg_busy:
 ; *** SHUTDOWN, proper shutdown, with or without poweroff ***
 ; ***********************************************************
 ;		INPUT
-; Y = subfunction code
+; acc B	= subfunction code
 ;		OUTPUT
-; C = not implemented?
+; C	= not implemented?
 ;		USES b_sig (calls B_SIGNAL)
 ; sd_flag is a kernel variable
 
 shutdown:
-	CPY #PW_STAT		; is it going to suspend?
+	CMP B #PW_STAT		; is it going to suspend?
 		BEQ sd_stat			; don't shutdown system then!
-	CPY #PW_CLEAN		; from end of main task
+	CMP B #PW_CLEAN		; from end of main task
 		BEQ sd_2nd			; continue with second stage
-	STY sd_flag			; store mode for later, first must do proper system shutdown, note long addressing
+	STA B sd_flag			; store mode for later, first must do proper 
+system shutdown, note long addressing
 ; ask THE braid to terminate
-	LDY #0				; PID=0 means ALL braids
-	LDA #SIGTERM		; will be asked to terminate
-	STA b_sig			; store signal type
+	LDA B #0			; PID=0 means ALL braids
+	LDA A #SIGTERM		; will be asked to terminate
+	STA A b_sig			; store signal type
 	JMP signal			; ask braids to terminate, needs to return to task until the end
 ; ** the real stuff starts here **
 sd_2nd:
 ; now let's disable all drivers
 	SEI					; disable interrupts
 ; call each driver's shutdown routine
+;6502******************************************************************
 	LDA drv_num			; get number of installed drivers
 	ASL					; twice the value as a pointer
 	TAX					; use as index
@@ -628,17 +637,18 @@ sd_done:
 	_JMPX(sd_tab-2)		; do as appropriate *** note offset as sd_stat will not be called from here
 
 ; firmware interface
+;6800*************************6800
 sd_stat:
-	LDY #PW_STAT		; suspend
+	LDA B #PW_STAT		; suspend
 sd_fw:
 	_ADMIN(POWEROFF)	; except for suspend, shouldn't return...
 	RTS					; for suspend or not implemented
 sd_off:
-	LDY #PW_OFF			; poweroff
-	BNE sd_fw			; no need for BRA
+	LDA B #PW_OFF			; poweroff
+	BRA sd_fw
 sd_cold:
-	LDY #PW_COLD		; cold boot
-	BNE sd_fw			; will reboot, shared code, no need for BRA
+	LDA B #PW_COLD		; cold boot
+	BRA sd_fw			; will reboot, shared code
 sd_warm:
 	JMP warm			; firmware no longer should take pointer, generic kernel knows anyway
 
@@ -657,36 +667,37 @@ sd_tab:
 -fw_table:				; 128-byte systems' firmware get unpatchable table from here, new 20150318
 k_vec:
 ; basic I/O
-	.word	cout		; output a character
-	.word	cin			; get a character
-	.word	string		; prints a C-string
-	.word	readLN		; buffered input
+	JMP	cout		; output a character
+	JMP	cin			; get a character
+	JMP	string		; prints a C-string
+	JMP	readLN		; buffered input
 ; simple windowing system (placeholders)
-	.word	open_w		; get I/O port or window
-	.word	close_w		; close window
-	.word	free_w		; will be closed by kernel
+	JMP	open_w		; get I/O port or window
+	JMP	close_w		; close window
+	JMP	free_w		; will be closed by kernel
 ; other generic functions
-	.word	uptime		; approximate uptime in ticks
-	.word	set_fg		; enable frequency generator (VIA T1@PB7)
-	.word	shutdown	; proper shutdown procedure
-	.word	load_link	; get addr. once in RAM/ROM
+	JMP	uptime		; approximate uptime in ticks
+	JMP	set_fg		; enable frequency generator (VIA T1@PB7)
+	JMP	shutdown	; proper shutdown procedure
+	JMP	load_link	; get addr. once in RAM/ROM
 ; simplified task management
-	.word	b_fork		; get available PID ***returns 0
-	.word	b_exec		; launch new process ***simpler
-	.word	signal		; send UNIX-like signal to a braid ***SIGTERM & SIGKILL only
-	.word	status		; get execution flags of a task ***eeeeeeeeeek
-	.word	get_pid		; get PID of current braid ***returns 0
-	.word	set_handler	; set SIGTERM handler
-	.word	yield		; give away CPU time for I/O-bound process ***does nothing
+	JMP	b_fork		; get available PID ***returns 0
+	JMP	b_exec		; launch new process ***simpler
+	JMP	signal		; send UNIX-like signal to a braid ***SIGTERM & SIGKILL only
+	JMP	status		; get execution flags of a task ***eeeeeeeeeek
+	JMP	get_pid		; get PID of current braid ***returns 0
+	JMP	set_handler	; set SIGTERM handler
+	JMP	yield		; give away CPU time for I/O-bound process ***does 
+nothing
 ; new functionalities TBD
-	.word	aqmanage	; manage asynchronous task queue
-	.word	pqmanage	; manage periodic task queue
+	JMP	aqmanage	; manage asynchronous task queue
+	JMP	pqmanage	; manage periodic task queue
 ; *** unimplemented functions ***
 #ifdef	SAFE
-	.word	malloc		; reserve memory
-	.word	memlock		; reserve some address
-	.word	free		; release memory
-	.word	release		; release ALL memory for a PID
-	.word	ts_info		; get taskswitching info
-	.word	set_curr	; set internal kernel info for running task
+	JMP	malloc		; reserve memory
+	JMP	memlock		; reserve some address
+	JMP	free		; release memory
+	JMP	release		; release ALL memory for a PID
+	JMP	ts_info		; get taskswitching info
+	JMP	set_curr	; set internal kernel info for running task
 #endif
