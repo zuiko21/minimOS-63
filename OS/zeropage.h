@@ -1,18 +1,20 @@
 ; minimOS-63 zeropage
-; v0.6a1
-; last modified 20170604-2025
+; v0.6a2
+; last modified 20170604-2033
 
-; *** setting these 2 bytes before will allow systmp and help HC05 stack
-uz_top	.byt		;...$E0
-z_used	.byt		;$E1
+; *** setting these 2 bytes before will allow systmp and help HC05 stack ***
+uz_top	.byt;$DE
+z_used	.byt		;$DF
 
 ; as 68HC05 has stack hardwired to $C0-$FF, needs special kernel with relocated locals
 #ifndef HC05
+systmp .word ; $E0
 std_in	.byt		;$E2
 stdout	.byt		;$E3
 local1	.dsb 4	;$E4
 local2	.dsb 4	;$E8
 local3	.dsb 4	;$EC
+; ...else put these elsewhere (lower RAM)
 #endif
 
 ; standard minimOS-63 ABI, hardly mutable
