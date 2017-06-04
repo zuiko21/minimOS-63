@@ -1,28 +1,31 @@
-; 6800 code snippet in order to reject a 6809 CPU!
+; 6800 code snippet in order to reject a 6809 CPU
+; updated to tell Hitachi and other microcontrrollers!
 ; v0.6b1
 ; (C) 2017 Carlos J. Santisteban
-; last modified 20170604-1905
+; last modified 20170604-1951
 
 .(
 	LDA A #2		; 86 02
-	TAP				; 06
-	TSX				; 30		; safer than NOP
-	BVS ok_6800		; 29 03
-		JMP lock		; 7E FF E0
+	TAP				; 06		; is ROR $30 on 6809...
+	TSX				; 30		; ...safer than NOP
+	BVS ok_6800		; 29 03		; ROR on 6809 lets V clear
+		JMP lock		; 7E FF E0	; incompatible CPU
 ok_6800:
-; continue telling improvements over the original 6800?
-	LSRD			; 04		; only on 6801/6301 will halve A
+; *** continue telling improvements over the original 6800, if desired ***
+	LSRD			; 04		; *** only microcontrollers will halve A ***
 	CMP A #2		; 81 02		; regular 6800?
-		BEQ set_cpu		; 27 04		; detected 6800/6802/6808 (A=2)
+		BEQ set_cpu		; 27 0D		; detected 6800/6802/6808 (A=2)
 ; microcontrollers have A halved at 1
 	LDX #0			; CE 00 00	; on Hitachi will become 1
-	XGDX			; 18		; A exchanged with X on Hitachi only ***beware of 68HCxx***
-; should include here inocuous code for 00/01 & Hitachi, but telling HCs apart
-	DEX			; 09		; DEY on 68HC11 will keep X=1 on Hitachi, 0 on Motorola
-	CPX #0			; 8C 00 00	; classic uCs had X down to 0, do not know about Y on HC11,
-	BNE set_cpu		; 26 02		; not HC, A stays at 0
-		LDA A #3		; 86 03		; otherwise is HC11
+	XGDX			; 18		; *** A exchanged with X on Hitachi only... ***
+	INX			; 08		; ...but INY on 68HC11!!!
+; X=0 on HC11, X=1 on 6801/6803, X=2 & A=0 on Hitachi, A=1 otherwise
+	TST A			; 4D		; zero only on Hitachi, already set
+		BEQ set_cpu		; 27 05		; Hitachi detected (A=0)
+	DEX			; 09		; becomes 0 on 6801/6803
+		BEQ set_cpu		; 26 02		; not HC, A stays at 1
+	LDA A #3		; 86 03		; otherwise is HC11
 set_cpu:
-; *** here A=0 for 6301/6303, A=1 for 6801/6803 and A=2 for 6800/6802/6808 ***
+; *** here A=0 for 6301/6303, A=1 for 6801/6803, A=2 for 6800/6802/6808, A=3 for 68HC11 ***
 
 .)
