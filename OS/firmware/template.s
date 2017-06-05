@@ -2,7 +2,7 @@
 ; sort-of generic template
 ; v0.6a3
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170605-0935
+; last modified 20170605-1443
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -75,19 +75,20 @@ post:
 	STX fw_swi			; new sysvar
 ; as NMI will be validated, no need to preinstall it!
 
-; ********************************
-; *** hardware interrupt setup ***
-; ********************************
-;	LDX #IRQ_FREQ	; interrupts per second
-;	STX irq_freq	; store speed...
+; *** preset jiffy irq frequency ***
+; not needed as will be done by installed kernel, no older versions to keep compatible!
 
+; *** reset jiffy count ***
 	LDX #ticks			; first address in uptime seconds AND ticks, assume contiguous
 res_sec:
-		CLR 0, X		; reset byte
+		CLR 0, X			; reset byte
 		INX					; next
 		CPX #ticks+5		; first invalid address
 		BNE res_sec			; continue until reached
 
+; ********************************
+; *** hardware interrupt setup ***
+; ********************************
 ; KERAton has no VIA, jiffy IRQ is likely to be fixed on, perhaps enabling counter input on PIA
 ;	LDAA #$C0			; enable T1 (jiffy) interrupt only
 ;	STAA VIA_J + IER
@@ -95,7 +96,7 @@ res_sec:
 ; **********************************
 ; *** direct print splash string ***
 ; **********************************
-	LDX #fw_splash				; reset index
+	LDX #fw_splash		; reset index
 fws_loop:
 		LDAA 0, X	; get char
 			BEQ fws_cr			; no more to print
@@ -103,53 +104,62 @@ fws_loop:
 		INX					; next char
 		BRA fws_loop
 fws_cr:
-	LDAA #LF				; trailing CR, needed by console!
-	STAA $0F				; visual 6800 output
+	LDAA #CR			; trailing CR, needed by console!
+	STAA $0F			; visual 6800 output
 
 ; ************************
 ; *** start the kernel ***
 ; ************************
 start_kernel:
-	LDX fw_warm		; get pointer
+	LDX fw_warm			; get pointer
 	JMP 0, X			; jump there!
 
+; ********************************
+; ********************************
+; ****** interrupt handlers ******
+; ********************************
+; ********************************
+
+; **********************************************
 ; *** vectored NMI handler with magic number ***
+; **********************************************
 nmi:
 ; registers are saved! but check system pointers
 ; make NMI reentrant
 	LDAA systmp			; get original word
 	LDAB systmp+1
-	PSHB					; store them in similar order
+	PSHB				; store them in similar order
 	PSHA
 ; prepare for next routine
 	LDX fw_nmi			; get vector to supplied routine
 ; check whether user NMI pointer is valid
+; as the magic string will NOT be "executed", can remain the same as 6502
 	LDAA 0, X			; get first char
-	CMPA #'U'			; matches magic string? REVISE
+	CMPA #'U'			; matches magic string?
 		BNE rst_nmi			; error, use standard handler
 	LDAA 1, X			; get second char
-	CMPA #'N'			; matches magic string? REVISE
+	CMPA #'N'			; matches magic string?
 		BNE rst_nmi			; error, use standard handler
 	LDAA 2, X			; get third char
-	CMPA #'j'			; matches magic string? REVISE
+	CMPA #'j'			; matches magic string?
 		BNE rst_nmi			; error, use standard handler
 	LDAA 3, X			; get fourth char
-	CMPA #'*'			; matches magic string? REVISE
+	CMPA #'*'			; matches magic string?
 		BNE rst_nmi			; error, use standard handler
 	JSR 4, X			; routine OK, skip magic string!
 ; *** here goes the former nmi_end routine ***
 nmi_end:
-	PULA					; retrieve saved vars
+	PULA				; retrieve saved vars
 	PULB
-	STAB systmp+1			; restore values
+	STAB systmp+1		; restore values
 	STAA systmp+1
 	RTI					; resume normal execution, hopefully
 
-; *** execute standard NMI handler ***
+; *** execute standard NMI handler, if magic string failed ***
 rst_nmi:
-	LDAA #<nmi_end		; prepare return address
-	PSHA
-	LDAA #>nmi_end		; now MSB
+	LDAB #<nmi_end		; prepare return address
+	LDAA #>nmi_end		; also MSB
+	PSHB				; push in standard order
 	PSHA
 ; ...will continue thru subsequent standard handler, its RTS will get back to ISR exit
 
@@ -165,30 +175,32 @@ std_nmi:
 ; *** generic functions ***
 
 ; GESTALT, get system info, API TBD
-; zpar -> available pages of (kernel) SRAM
-; zpar+2.W -> available BANKS of RAM
-; zpar2.B -> speedcode
-; zpar2+2.B -> CPU type
-; zpar3.W/L -> points to a string with machine name
+; cpu_ll	= CPU type
+; c_speed	= speed code
+; str_pt	= points to a string with machine name
+; ex_pt		= points to a map of default memory conf ???
+; k_ram		= available pages of (kernel) SRAM
 ; *** WILL change ABI/API ***REVISE
+
 fw_gestalt:
-;6502
-;	LDA himem		; get pages of kernel SRAM (4)
-;	STA zpar		; store output (3)
-;	_STZX zpar+2	; no bankswitched RAM yet (4)
-;	_STZX zpar3+2	; same for string address (4)
-;	LDA #>fw_mname	; get string pointer
-;	LDY #<fw_mname
-;	STA zpar3+1		; put it outside
-;	STY zpar3
-;	LDA #SPEED_CODE	; speed code as determined in options.h (2+3)
-;	STA zpar2
-;	LDA fw_cpu		; get kind of CPU (previoulsy stored or determined) (4+3)
-;	STA zpar2+2
-	_DR_OK			; done (8)
+
+	LDAB fw_cpu			; get kind of CPU (previoulsy stored or determined)
+	LDAA #SPEED_CODE	; speed code as determined in options.h
+	STAB cpu_ll			; set outputs
+	STAA c_speed
+	LDAA himem			; get pages of SRAM???
+	STAA k_ram			; store output
+; no "high" RAM on this architecture
+	LDX #fw_mname		; get string pointer
+	STX str_pt			; put it outside
+	LDX #fw_map			; pointer to standard map TBD ????
+	STX ex_pt			; set output
+	_DR_OK				; done
 
 ; SET_ISR, set IRQ vector
-; kerntab <- address of ISR
+;		INPUT
+; kerntab	= address of ISR (will take care of all necessary registers)
+
 fw_s_isr:
 	_ENTER_CS				; disable interrupts and save sizes!
 	LDX kerntab				; get pointer
@@ -197,9 +209,13 @@ fw_s_isr:
 	_DR_OK					; done (8)
 
 ; SET_NMI, set NMI vector
-; kerntab <- address of NMI code (including magic string)
+;		INPUT
+; kerntab	= address of NMI code (including magic string, ends in RTS)
+
 ; might check whether the pointed code starts with the magic string
-; no need to disable interrupts as a partially set pointer would be rejected
+; no need to disable interrupts as a partially set pointer would be rejected...
+; ...unless SAFE mode is NOT selected (will not check upon NMI)
+
 fw_s_nmi:
 	LDX kerntab			; get pointer to supplied code + magic string
 #ifdef	SAFE
@@ -223,8 +239,9 @@ fsn_valid:
 	STX fw_nmi				; store for firmware
 	_DR_OK					; done (8)
 
-; SET_BRK, set BRK handler
-; kerntab <- address of BRK code
+; SET_BRK, set SWI handler
+;		INPUT
+; kerntab	= address of SWI routine (ending in RTS)
 fw_s_brk:
 	_ENTER_CS				; disable interrupts!
 	LDX kerntab				; get pointer
@@ -233,10 +250,35 @@ fw_s_brk:
 	_DR_OK					; done
 
 ; JIFFY, set jiffy IRQ frequency
+;		INPUT
+; irq_hz	= frequency in Hz (0 means no change)
+;		OUTPUT
+; irq_hz	= actually set frequency (in case of error or no change)
+; C			= could not set (not here)
 fw_jiffy:
-; ****** TO BE DONE ******
+; this is generic ******************** 6502 **************************
+; if could not change, then just set return parameter and C
+	LDA irq_hz+1		; get input values
+	LDY irq_hz
+		BNE fj_set			; not just checking
+	CMP #0				; MSB also 0?
+		BNE fj_set			; not checking
+	LDA irq_freq+1		; get current frequency
+	LDY irq_freq
+	STA irq_hz+1		; set return values
+	STY irq_hz
+fj_end:
+	_DR_OK
+fj_set:
+	STA irq_freq+1		; store in sysvars
+	STY irq_freq
+	_BRA fj_end			; all done, no need to update as will be OK
 
-; IRQ_SOURCE, get source of interrupt
+; IRQ_SOURCE, investigate source of interrupt
+;		OUTPUT
+; *** X	= 0 (periodic), 2 (async IRQ @ 65xx) *********************** 6502 ************
+; *** notice NON-standard output register for faster indexed jump! ***
+; other even values hardware dependent
 fw_i_src:
 ; ****** TO BE DONE ******
 	_DR_ERR(UNAVAIL)	; not yet implemented
@@ -244,8 +286,9 @@ fw_i_src:
 ; *** hardware specific ***
 
 ; POWEROFF, poweroff etc
-; B <- mode (0 = suspend, 2 = warmboot, 4 = coldboot, 6 = poweroff)
+; acc B <- mode (0 = suspend, 2 = warmboot, 4 = coldboot, 6 = poweroff)
 ; C -> not implemented
+
 fw_power:
 	TSTB				; is it zero?
 	BNE fwp_ns			; not suspend
@@ -277,7 +320,9 @@ fw_fgen:
 #ifndef	LOWRAM
 
 ; INSTALL, copy jump table
-; kerntab <- address of supplied jump table
+;		INPUT
+; kerntab	= address of supplied JUMP table
+
 fw_install:
 	_ENTER_CS			; disable interrupts!
 	LDAB #0				; reset counter
@@ -303,6 +348,7 @@ fwi_loop:
 ; PATCH, patch single function
 ; kerntab <- address of code
 ; acc B <- function to be patched
+
 fw_patch:
 	_ENTER_CS				; disable interrupts
 	ADDB #<fw_table				; compute final LSB
@@ -317,13 +363,16 @@ fw_patch:
 	STAB 1, X
 	_EXIT_CS				; restore interrupts
 	_DR_OK					; done
-; CONTEXT to do to do **********
+
+; CONTEXT, zeropage & stack bankswitching
+; *** TO BE DONE ****** TO BE DONE ***
 fw_ctx:
 	_DR_ERR(UNAVAIL)	; not yet implemented
+
 #else
 ; these functions will not work on 128-byte systems!
 fw_install:
-; limited version
+; *** limited version ***
 	_ENTER_CS				; disable interrupts
 	LDX kerntab		; the supplied table will be pointed...
 	STX $FC			; ...from the standard address
@@ -363,7 +412,7 @@ fw_mname:
 #endif
 
 ; *********************************
-; *** administrative jump table ***
+; *** administrative JUMP table ***
 ; *********************************
 
 * = admin_ptr
