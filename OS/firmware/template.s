@@ -2,7 +2,7 @@
 ; sort-of generic template
 ; v0.6a3
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170605-1829
+; last modified 20170605-1912
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -25,8 +25,8 @@ fw_mname:
 	.dsb	fw_start + $F8 - *, $FF	; for ready-to-blow ROM, advance to time/date field
 
 ; *** date & time in MS-DOS format at byte 248 ($F8) ***
-	.word	$8800			; time, 17.00
-	.word	$4AC1			; date, 2017/6/1
+	.word	$9800			; time, 19.00
+	.word	$4AC5			; date, 2017/6/1
 
 fwSize	=	$10000 - fw_start - 256	; compute size NOT including header!
 
@@ -376,7 +376,7 @@ fw_install:
 ; *** limited version ***
 	_ENTER_CS				; disable interrupts
 	LDX kerntab		; the supplied table will be pointed...
-	STX $FC			; ...from the standard address
+	STX kern_ptr			; ...from the standard address
 	_EXIT_CS				; restore interrupts
 	_DR_OK					; done
 
