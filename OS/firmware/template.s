@@ -2,7 +2,7 @@
 ; sort-of generic template
 ; v0.6a3
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170605-1443
+; last modified 20170605-1829
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -323,25 +323,26 @@ fw_fgen:
 ;		INPUT
 ; kerntab	= address of supplied JUMP table
 
+; CS is 28+3 bytes, (6+)18+ 256*43 = (6+) 11026 cycles
 fw_install:
 	_ENTER_CS			; disable interrupts!
-	LDAB #0				; reset counter
-	LDX fw_table			; get destination pointer
-	STX systmp			; store temporarily
+	CLRB				; reset counter (2)
+	LDX #fw_table			; get destination pointer (3) eeeeeeeek
+	STX systmp			; store temporarily (5)
 fwi_loop:
-		LDX kerntab		; set origin pointer
-		LDAA 0, X		; get byte from table as supplied
-		INX			; increment
-		STX kerntab		; ...and update
-		LDX systmp		; switch to destination
-		STAA 0, X		; copy the byte
-		INX			; increment
-		STX systmp		; ...and update
-		INCB			; advance counter
-		BNE fwi_loop		; until whole page is done
-;	DEC kerntab		; restore original value
-	LDX #fw_table		; the firmware table will be pointed...
-	STX $FC			; ...from the standard address
+		LDX kerntab		; set origin pointer (4)
+		LDAA 0, X		; get byte from table as supplied (5)
+		INX			; increment (4)
+		STX kerntab		; ...and update (5)
+		LDX systmp		; switch to destination (4)
+		STAA 0, X		; copy the byte (6)
+		INX			; increment (4)
+		STX systmp		; ...and update (5)
+		INCB			; advance counter (2)
+		BNE fwi_loop		; until whole page is done (4)
+;	DEC kerntab+1		; restore original value (6)
+	LDX #fw_table		; the firmware table will be pointed... (3)
+	STX kern_ptr			; ...from the standard address (5)
 	_EXIT_CS			; restore interrupts if needed
 	_DR_OK				; all done
 
