@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel
-; v0.6a1
+; v0.6a2
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170604-2220
+; last modified 20170605-1933
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -35,16 +35,16 @@ kern_head:
 	.asc	"****", 13		; flags TBD
 	.asc	"kernel", 0		; filename
 kern_splash:
-	.asc	"minimOS-63 0.6a1", 0	; version in comment
+	.asc	"minimOS-63 0.6a2", 0	; version in comment
 
 	.dsb	kern_head + $F8 - *, $FF	; padding
 
-	.word	$7000	; time, 14.00
-	.word	$4AB3	; date, 2017/5/19
+	.word	$9800	; time, 19.00
+	.word	$4AC5	; date, 2017/6/5
 
 kern_siz = kern_end - kern_head - $FF
 
-	.word	kern_siz, 0	; kernel size excluding header 
+	.word	kern_siz, 0	; kernel size excluding header
 #endif
 
 ; **************************************************
@@ -55,9 +55,10 @@ warm:
 	SEI				; interrupts off, just in case (2)
 
 ; install kernel jump table if not previously loaded
+; LOWRAM systems will use a reduced, non-patchable INSTALL function
 #ifndef		DOWNLOAD
-	LDX #k_vec			; get table address
-	STX ex_pt			; store parameter
+	LDX #k_vec			; get table address (3)
+	STX kerntab			; store parameter (5)
 	_ADMIN(INSTALL)		; copy jump table
 #endif
 
@@ -69,29 +70,26 @@ warm:
 ; Kernel no longer supplies default NMI, but could install it otherwise
 
 ; *** default action in case the scheduler runs out of tasks ***
-	LDA A #PW_STAT		; default action upon complete task death
-	STA A sd_flag			; this is important to be clear (PW_STAT) or set as proper error handler
+	LDAA #PW_STAT		; default action upon complete task death
+	STAA sd_flag			; this is important to be clear (PW_STAT) or set as proper error handler
 
 ; *****************************
 ; *** memory initialisation ***
 ; *****************************
 
 ; this should take a basic memory map from firmware, perhaps via the GESTALT function
-;6502************************************************
 #ifndef		LOWRAM
 ; ++++++
-	LDY #FREE_RAM		; get status of whole RAM
-	STY ram_stat		; as it is the first entry, no index needed
-	LDY #END_RAM		; also for end-of-memory marker
-	STY ram_stat+1		; second entry in array
-	LDX #>user_sram		; beginning of available ram, as defined... in rom.s
-	LDY #<user_sram		; LSB misaligned?
+	LDX #256*FREE_RAM+END_RAM	; get status of both ends
+	STX ram_stat		; as it is the first entry, no index needed
+	LDAA #>user_sram	; beginning of available ram, as defined... in rom.s
+	LDAB #<user_sram	; LSB misaligned?
 	BEQ ram_init		; nothing to align
-		INX					; otherwise start at next page
+		INCA				; otherwise start at next page
 ram_init:
-	STX ram_pos			; store it, this is PAGE number
-	LDA #SRAM			; number of SRAM pages as defined in options.h *** revise
-	STA ram_pos+1		; store second entry and we are done!
+	STAA ram_pos			; store it, this is PAGE number
+	LDAA #SRAM			; number of SRAM pages as defined in options.h *** revise
+	STAA ram_pos+1		; store second entry and we are done!
 ; ++++++
 #endif
 
@@ -103,18 +101,19 @@ ram_init:
 
 ; *** 1) initialise stuff ***
 ; clear some bytes
-	LDX #0				; reset driver index (2)
-	STX queues_mx		; reset all indexes, NMOS-savvy (4+4+4)
-	STX queues_mx+1
+	CLRB				; reset driver index (2)
+	CLR queues_mx		; reset all indexes (6+6)
+	CLR queues_mx+1
 
 #ifdef LOWRAM
 ; ------ low-RAM systems have no direct tables to reset ------
 ; ** maybe look for fast tables in ROM **
-	STX drv_num			; single index of, not necessarily SUCCESSFULLY, detected drivers, updated 20150318 (4)
+	CLR drv_num			; single index of, not necessarily SUCCESSFULLY, detected drivers, updated 20150318 (4)
 ; ------
 #else
 ; ++++++ new direct I/O tables for much faster access 20160406 ++++++
-	STX run_pid			; new 170222, set default running PID *** this must be done BEFORE initing drivers as multitasking should place appropriate temporary value via SET_CURR!
+	CLR run_pid			; new 170222, set default running PID *** this must be done BEFORE initing drivers as multitasking should place appropriate temporary value via SET_CURR!
+;****6502***************************6502********************
 dr_clear:
 		_STZA cio_lock, X	; clear I/O locks! (4)
 		_STZA cin_mode, X	; and binary flags, actually next address (4)
@@ -291,7 +290,7 @@ dr_neqnw:
 			BPL dr_iqloop		; eeeeek
 */
 ; *** 6) continue initing drivers ***
-		_BRA dr_next		; if arrived here, did not fail initialisation
+		BRA dr_next		; if arrived here, did not fail initialisation
 
 dr_abort:
 ; *** if arrived here, driver initialisation failed in some way! ***
@@ -392,7 +391,7 @@ dr_ok:					; *** all drivers inited ***
 #ifdef	LOWRAM
 ; ------ terminate ID list ------ is this REALLY necessary?
 	LDX drv_num			; retrieve single index (4)
-	_STZA drivers_id, X	; terminate list, and we are done! (4) 
+	_STZA drivers_id, X	; terminate list, and we are done! (4)
 ; ------
 #endif
 
@@ -418,7 +417,7 @@ dr_ok:					; *** all drivers inited ***
 	JSR ks_cr			; leading newline
 	LDX #kern_splash	; get pointer
 	STX str_pt			; set parameter
-	LDA B #DEVICE			; eeeeeek
+	LDAB #DEVICE			; eeeeeek
 	_KERNEL(STRING)		; print it!
 	JSR ks_cr			; trailing newline
 
@@ -439,9 +438,9 @@ here:
 
 ; a quick way to print a newline on standard device
 ks_cr:
-	LDA A #CR			; leading newline
-	STA A io_c
-	LDA B #DEVICE
+	LDAA #CR			; leading newline
+	STAA io_c
+	LDAB #DEVICE
 	_KERNEL(COUT)		; print it
 	RTS
 
@@ -468,7 +467,7 @@ k_isr:
 ; in headerless builds, keep at least the splash string
 #ifdef	NOHEAD
 kern_splash:
-	.asc	"minimOS-63 0.6a1", 0
+	.asc	"minimOS-63 0.6a2", 0
 #endif
 
 kern_end:		; for size computation

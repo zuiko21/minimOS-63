@@ -1,6 +1,6 @@
-; minimOS·63 0.6a2 MACRO definitions
+; minimOS·63 0.6a3 MACRO definitions
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170602-1405
+; last modified 20170605-1944
 
 ; *** standard addresses ***
 
@@ -22,7 +22,7 @@ FILE_DEV	=	130		; *** this will be sticked somewhere as no patchable API entries
 #define		_ADMIN(a)		LDX #admin_ptr: JSR a, X
 
 ; *** function endings ***
-; if Carry is set, B holds error code
+; if Carry is set, acc B holds error code
 ; * all the same, keep all names for 65xx easier porting *
 ; for kernel API
 #define		_EXIT_OK	CLC: RTS
@@ -42,8 +42,9 @@ FILE_DEV	=	130		; *** this will be sticked somewhere as no patchable API entries
 #define		_ISR_DONE	CLC: RTS
 
 ; new macros for critical sections, do not just rely on SEI/CLI
-#define		_ENTER_CS	PHP: SEI
-#define		_EXIT_CS	PLP
+; accumulator A must be kept! Otherwise add PSHA after entering and PULA before exit!
+#define		_ENTER_CS	TPA: SEI
+#define		_EXIT_CS	TAP
 
 
 ; ** panic call, now using BRK in case of error display ** new BRK handled 20161010

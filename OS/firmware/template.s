@@ -1,8 +1,8 @@
 ; firmware for minimOS-63
 ; sort-of generic template
-; v0.6a3
+; v0.6a4
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170605-1912
+; last modified 20170605-2042
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -25,7 +25,7 @@ fw_mname:
 	.dsb	fw_start + $F8 - *, $FF	; for ready-to-blow ROM, advance to time/date field
 
 ; *** date & time in MS-DOS format at byte 248 ($F8) ***
-	.word	$9800			; time, 19.00
+	.word	$A000			; time, 20.00
 	.word	$4AC5			; date, 2017/6/1
 
 fwSize	=	$10000 - fw_start - 256	; compute size NOT including header!
@@ -202,19 +202,17 @@ fw_gestalt:
 ; kerntab	= address of ISR (will take care of all necessary registers)
 
 fw_s_isr:
-	_ENTER_CS				; disable interrupts and save sizes!
+; no CS as STX is atomic!
 	LDX kerntab				; get pointer
 	STX fw_isr				; store for firmware
-	_EXIT_CS				; restore interrupts if needed
-	_DR_OK					; done (8)
+	_DR_OK					; done
 
 ; SET_NMI, set NMI vector
 ;		INPUT
 ; kerntab	= address of NMI code (including magic string, ends in RTS)
 
 ; might check whether the pointed code starts with the magic string
-; no need to disable interrupts as a partially set pointer would be rejected...
-; ...unless SAFE mode is NOT selected (will not check upon NMI)
+; no CS as STX is atomic!
 
 fw_s_nmi:
 	LDX kerntab			; get pointer to supplied code + magic string
@@ -242,11 +240,11 @@ fsn_valid:
 ; SET_BRK, set SWI handler
 ;		INPUT
 ; kerntab	= address of SWI routine (ending in RTS)
+; no CS as STX is atomic!
+
 fw_s_brk:
-	_ENTER_CS				; disable interrupts!
 	LDX kerntab				; get pointer
 	STX fw_brk				; store for firmware
-	_EXIT_CS				; restore interrupts if needed
 	_DR_OK					; done
 
 ; JIFFY, set jiffy IRQ frequency
@@ -256,23 +254,17 @@ fw_s_brk:
 ; irq_hz	= actually set frequency (in case of error or no change)
 ; C			= could not set (not here)
 fw_jiffy:
-; this is generic ******************** 6502 **************************
+; GENERIC!!!
 ; if could not change, then just set return parameter and C
-	LDA irq_hz+1		; get input values
-	LDY irq_hz
-		BNE fj_set			; not just checking
-	CMP #0				; MSB also 0?
-		BNE fj_set			; not checking
-	LDA irq_freq+1		; get current frequency
-	LDY irq_freq
-	STA irq_hz+1		; set return values
-	STY irq_hz
+	LDX irq_hz		; get input values
+		BNE fj_set		; not just checking
+	LDX irq_freq		; get current frequency
+	STX irq_hz		; set return values
 fj_end:
 	_DR_OK
 fj_set:
-	STA irq_freq+1		; store in sysvars
-	STY irq_freq
-	_BRA fj_end			; all done, no need to update as will be OK
+	STX irq_freq		; store in sysvars
+	BRA fj_end		; all done, no need to update as will be OK
 
 ; IRQ_SOURCE, investigate source of interrupt
 ;		OUTPUT
@@ -303,8 +295,7 @@ fwp_ns:
 fwp_nw:
 	CMPB #4				; cold?
 	BNE fwp_nc			; not
-		LDX $FFFE			; 6800 RES vector
-		JMP 0, X			; go!
+		JMP reset			; Go to internal reset!
 fwp_nc:
 	CMPB #6				; off?
 	BNE fwp_exit			; not recognised
@@ -326,6 +317,7 @@ fw_fgen:
 ; CS is 28+3 bytes, (6+)18+ 256*43 = (6+) 11026 cycles
 fw_install:
 	_ENTER_CS			; disable interrupts!
+	PSHA				; EEEEEEEEEEEK
 	CLRB				; reset counter (2)
 	LDX #fw_table			; get destination pointer (3) eeeeeeeek
 	STX systmp			; store temporarily (5)
@@ -343,6 +335,7 @@ fwi_loop:
 ;	DEC kerntab+1		; restore original value (6)
 	LDX #fw_table		; the firmware table will be pointed... (3)
 	STX kern_ptr			; ...from the standard address (5)
+	PULA				; EEEEEEEEEEEK
 	_EXIT_CS			; restore interrupts if needed
 	_DR_OK				; all done
 
@@ -351,16 +344,16 @@ fwi_loop:
 ; acc B <- function to be patched
 
 fw_patch:
-	_ENTER_CS				; disable interrupts
+	_ENTER_CS				; disable interrupts, respects A
 	ADDB #<fw_table				; compute final LSB
 	STAB systmp+1				; set temporary pointer
 	LDAB #>fw_table				; now for MSB
 	ADCB #0					; propagate carry
 	STAB systmp				; pointer is ready
 	LDX systmp				; set as index
-	LDAA kerntab				; get function MSB
+	LDAB kerntab				; get function MSB
+	STAB 0, X				; store into firmware
 	LDAB kerntab+1				; and LSB
-	STAA 0, X				; store into firmware
 	STAB 1, X
 	_EXIT_CS				; restore interrupts
 	_DR_OK					; done
@@ -374,10 +367,9 @@ fw_ctx:
 ; these functions will not work on 128-byte systems!
 fw_install:
 ; *** limited version ***
-	_ENTER_CS				; disable interrupts
+; no CS as STX is atomic!
 	LDX kerntab		; the supplied table will be pointed...
 	STX kern_ptr			; ...from the standard address
-	_EXIT_CS				; restore interrupts
 	_DR_OK					; done
 
 fw_patch:

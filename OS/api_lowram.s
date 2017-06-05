@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel API for LOWRAM systems
-; v0.6a1
+; v0.6a2
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170604-2210
+; last modified 20170605-2028
 
 ; *** dummy function, non implemented ***
 unimplemented:		; placeholder here, not currently used
@@ -39,22 +39,22 @@ cio_of = da_ptr			; parameter switching between CIN and COUT
 ; da_ptr globally defined, cio_of not needed upon calling dr_call!
 
 cout:
-;6502******************************************************************
-	LDA #D_COUT			; only difference from cin (2)
-	STA cio_of			; store for further indexing (3)
-	TYA					; for indexed comparisons (2)
+	LDAA #D_COUT			; only difference from cin (2)
+	STAA cio_of			; store for further indexing (3)
+	TSTB					; for indexed comparisons (2)
 	BNE co_port			; not default (3/2)
-		LDA stdout			; default output device (3)
-		BNE co_port			; eeeeeeeeeek
-			LDA #DEVICE			; *** somewhat ugly hack ***
+		LDAB stdout			; default output device (3)
+	BNE co_port			; eeeeeeeeeek
+		LDAB #DEVICE			; *** somewhat ugly hack ***
 co_port:
 	BMI cio_phys		; not a logic device (3/2)
 ; no need to check for windows or filesystem
 ; investigate rest of logical devices
-		CMP #DEV_NULL		; lastly, ignore output
+		CMPB #DEV_NULL		; lastly, ignore output
 			BNE cio_nfound		; final error otherwise
 		_EXIT_OK			; "/dev/null" is always OK
 cio_phys:
+;6502******************************************************************
 	LDX drv_num			; number of drivers (3)
 		BEQ cio_nfound		; no drivers at all! (2/3)
 cio_loop:
@@ -69,7 +69,6 @@ cio_dev:
 	TXA					; get index in list (2)
 	ASL					; two times (2)
 	TAX					; index for address table!
-; unified version is 15 bytes, 20 + 29 clocks
 	LDY cio_of			; get offset (3)
 	LDA drivers_ad, X	; take table LSB (4)
 	STA da_ptr			; store pointer (3)
@@ -89,23 +88,22 @@ cio_dev:
 ; cin_mode is a kernel variable
 
 cin:
-;6502******************************************************************
-	LDA #D_CIN			; only difference from cout
-	STA cio_of			; store for further addition
-	TYA					; for indexed comparisons
+	LDAA #D_CIN			; only difference from cout
+	STAA cio_of			; store for further addition
+	TSTB					; for indexed comparisons
 	BNE ci_port			; specified
-		LDA std_in			; default input device
-		BNE ci_port			; eeeeeeeeeek
-			LDA #DEVICE			; *** somewhat ugly hack ***
+		LDAB std_in			; default input device
+	BNE ci_port			; eeeeeeeeeek
+		LDAB #DEVICE			; *** somewhat ugly hack ***
 ci_port:
 	BPL ci_nph			; logic device
 		JSR cio_phys		; check physical devices... but come back for events! new 20150617
 			BCS ci_exit			; some error, send it back
 ; ** EVENT management **
 ; this might be revised, or supressed altogether!
-		LDA io_c			; get received character
-		CMP #' '			; printable?
-			BCC ci_manage		; if not, might be an event
+		LDAA io_c			; get received character
+		CMPA #' '-1			; printable?
+			BLS ci_manage		; if not, might be an event
 ci_exitOK:
 		CLC					; otherwise, no error --- eeeeeeeek!
 ci_exit:
@@ -113,22 +111,22 @@ ci_exit:
 ; ** continue event management **
 ci_manage:
 ; check for binary mode
-	LDY cin_mode		; get flag, new sysvar 20150617
+	TST cin_mode		; get flag, new sysvar 20150617
 	BEQ ci_event		; should process possible event
-		_STZY cin_mode		; back to normal mode
-		_BRA ci_exit		; and return whatever was received
+		CLR cin_mode		; back to normal mode
+		BRA ci_exitOK		; and return whatever was received
 ci_event:
-	CMP #16				; is it DLE?
+	CMPA #16			; is it DLE?
 	BNE ci_notdle		; otherwise check next
-		STA cin_mode		; set binary mode! SAFER!
+		STAA cin_mode		; set binary mode! SAFER!
 		BNE ci_abort		; and supress received character, no need for BRA
 ci_notdle:
-	CMP #3				; is it ^C? (TERM)
+	CMPA #3				; is it ^C? (TERM)
 	BNE ci_exitOK		; otherwise there's no more to check -- only signal for single-task systems!
-		LDA #SIGTERM
-		STA b_sig			; set signal as parameter
+		LDAB #SIGTERM
+		STAB b_sig			; set signal as parameter
 #ifdef	SAFE
-		LDY #0				; sent to all, this is the only one (skimming a couple of bytes!)
+		CLRB				; sent to all, this is the only one (skimming a couple of bytes!)
 #endif
 		JSR signal			; send signal FASTER
 ci_abort:
@@ -136,16 +134,16 @@ ci_abort:
 
 ci_nph:
 ; only logical devs, no need to check for windows or filesystem
-	CMP #DEV_RND		; getting a random number?
+	CMPB #DEV_RND		; getting a random number?
 		BEQ ci_rnd			; compute it!
-	CMP #DEV_NULL		; lastly, ignore input
+	CMPB #DEV_NULL		; lastly, ignore input
 		BNE cio_nfound		; final error otherwise
 	_EXIT_OK			; "/dev/null" is always OK
 
 ci_rnd:
-; *** generate random number (TO DO) ***
-	LDA ticks			; simple placeholder
-	STA io_c			; eeeeeeek
+; *** generate random number (6800) ***
+	LDAA ticks+1			; simple placeholder
+	STAA io_c			; eeeeeeek
 	_EXIT_OK
 
 
@@ -161,8 +159,8 @@ ci_rnd:
 ; C	= not supported/not available
 
 open_w:
-	LDA A w_rect			; asking for some size?
-	ORA A w_rect+1
+	LDAA w_rect			; asking for some size?
+	ORAA w_rect+1
 	BEQ ow_no_window	; wouldn't do it
 		_ERR(NO_RSRC)
 
@@ -186,7 +184,7 @@ open_w:
 ow_no_window:
 get_pid:
 b_fork:
-	LDA B #0			; no multitasking, system reserved PID
+	LDAB #0				; no multitasking, system reserved PID
 yield:
 close_w:
 free_w:
@@ -201,21 +199,14 @@ free_w:
 ; up_sec	= 32b uptime in seconds
 
 uptime:
-;6502******************************************************************
-	LDX #7				; end of destination offset (2)
-	LDY #5				; end of source pointer (2)
-	_ENTER_CS			; do not change while copying (5)
-up_loop:
-		LDA ticks, Y		; get system variable byte (4)
-		STA up_ticks, X		; and store them in output parameter (4)
-		DEX					; back one byte (2)
-		CPX #3				; already did seconds? (2)
-		BNE up_nosec		; do not skip to ticks... (3/2)
-			LDX #1				; ...until seconds are done (2)
-up_nosec:
-		DEY					; go for next (2)
-		BPL up_loop			; (3/2)
-	_EXIT_CS			; (4)
+	_ENTER_CS		; do not change while copying, A is preserved (4)
+	LDX ticks		; get system variable word (5)
+	STX up_ticks		; and store them in output parameter (5)
+	LDX ticks+2		; get system variable word (5)
+	STX up_sec		; and store them in output parameter (5)
+	LDX ticks+4		; get system variable last word (5)
+	STX up_sec+2		; and store it in output parameter (5)
+	_EXIT_CS		; A was preserved (2)
 	_EXIT_OK
 
 
@@ -225,55 +216,46 @@ up_nosec:
 ;		INPUT
 ; acc B		= PID (0 for singletask only)
 ; ex_pt		= execution pointer
-; def_io	= 16b default std_in (LSB) & stdout (MSB)
+; def_io	= 16b default std_in (MSB) & stdout (LSB)
 ;
 ; API still subject to change... (rendez-vous mode TBD)
 
 b_exec:
-;6502******************************************************************
-
 ; non-multitasking version
 #ifdef	SAFE
-	TYA					; should be system reserved PID, best way
+	TSTB					; should be system reserved PID
 	BEQ ex_st			; OK for single-task system
 		_ERR(NO_RSRC)		; no way without multitasking
 ex_st:
 #endif
-	LDX #SPTR			; init stack
-	TXS
-	JSR ex_jmp			; call supplied address
+	LDS #SPTR			; init stack
+; set default SIGTERM handler! eeeeeeeeeeeeeeeeeeeeek
+	LDX #sig_kill			; default TERM
+	STX mm_sterm			; set variable
+; this is how a task should replace the shell
+	LDAA #ZP_AVAIL		; eeeeeeeeeeek
+	STAA z_used			; otherwise SAFE will not work
+; and set default devices!!! eeeeeeeeeeeeeeeeeeeeeeek
+; in case of LOWRAM, this will alter default global devices, is that OK?
+	LDX def_io			; standard input/output
+	STX std_in			; set at GLOBAL
+; *** soon will preset registers according to new API ***
+; at last, launch code
+	LDX ex_pt			; where to jump
+	CLI					; time to do it!
+	JSR 0, X			; call and return to SIGKILL
+
 ; *** SIGKILL standard handler ***
 sig_kill:
 ; systems without memory management have nothing to free...
-	LDA sd_flag			; some pending action?
+	TST sd_flag			; some pending action?
 	BEQ rst_shell		; if not, just restart the shell
-		LDY #PW_CLEAN		; or go into second phase...
+		LDAB #PW_CLEAN		; or go into second phase...
 		JSR shutdown		; ...of shutdown procedure (could use JMP)
 ; if none of the above, a single task system can only restart the shell!
 rst_shell:
-	LDX #SPTR			; init stack again (in case SIGKILL was called)
-	TXS
+	LDS #SPTR			; init stack again (in case SIGKILL was called)
 	JMP sh_exec			; back to kernel shell!
-
-ex_jmp:
-; set default SIGTERM handler! eeeeeeeeeeeeeeeeeeeeek
-	LDA #>sig_kill		; get MSB
-	LDY #<sig_kill		; and LSB
-	STY mm_sterm		; set variable
-	STA mm_sterm+1
-; this is how a task should replace the shell
-	LDA #ZP_AVAIL		; eeeeeeeeeeek
-	STA z_used			; otherwise SAFE will not work
-; and set default devices!!! eeeeeeeeeeeeeeeeeeeeeeek
-; in case of LOWRAM, this will alter default global devices, is that OK?
-	LDA def_io			; standard input
-	STA std_in			; set at GLOBAL
-	LDA def_io+1		; same for output
-	STA stdout
-; *** soon will preset registers according to new API ***
-; at last, launch code
-	CLI					; time to do it!
-	JMP (ex_pt)			; DUH...
 
 
 ; **************************************************
@@ -284,22 +266,18 @@ ex_jmp:
 ; acc B	= PID (0 means TO ALL)
 
 signal:
-;6502******************************************************************
 #ifdef	SAFE
-	TYA					; check correct PID, really needed?
+	TSTB					; check correct PID, really needed?
 		BNE sig_pid			; strange error?
 #endif
-	LDY b_sig			; get the signal
-	CPY #SIGTERM		; clean shutdown?
+	LDAA b_sig			; get the signal
+	CMPA #SIGTERM		; clean shutdown?
 	BNE sig_suic
-		LDA #>sig_exit		; set standard return address
-		PHA
-		LDA #<sig_exit		; same for LSB
-		PHA
-		PHP					; as required by RTI
-		JMP (mm_sterm)		; execute handler, will return to sig_exit
+; 6800 SIGTERM handlers end in RTS, thus a pretty standard jump is OK
+		LDX mm_sterm		; pointer to handler
+		JMP 0, X		; will return to caller
 sig_suic:
-	CPY #SIGKILL		; suicide?
+	CMPA #SIGKILL		; suicide?
 		BEQ sig_kill
 sig_pid:
 	_ERR(INVALID)		; unrecognised signal
@@ -316,10 +294,10 @@ sig_pid:
 
 status:
 #ifdef	SAFE
-	TST B					; check PID
+	TSTB					; check PID
 		BNE sig_pid			; only 0 accepted
 #endif
-	LDA B #BR_RUN			; single-task systems are always running
+	LDAB #BR_RUN			; single-task systems are always running
 sig_exit:
 	_EXIT_OK
 
@@ -329,13 +307,13 @@ sig_exit:
 ; **************************************************************
 ;		INPUT
 ; acc B	= PID (0 means to myself)
-; ex_pt = SIGTERM handler routine (ending in RTI?)
+; ex_pt = SIGTERM handler routine (ending in RTS)
 ;		OUTPUT
 ; C = bad PID
 
 set_handler:
 #ifdef	SAFE
-	TST B				; check PID
+	TSTB				; check PID
 		BNE sig_pid			; only 0 accepted
 #endif
 	LDX ex_pt			; get pointer
@@ -596,16 +574,16 @@ fg_busy:
 ; sd_flag is a kernel variable
 
 shutdown:
-	CMP B #PW_STAT		; is it going to suspend?
+	CMPB #PW_STAT		; is it going to suspend?
 		BEQ sd_stat			; don't shutdown system then!
-	CMP B #PW_CLEAN		; from end of main task
+	CMPB #PW_CLEAN		; from end of main task
 		BEQ sd_2nd			; continue with second stage
-	STA B sd_flag			; store mode for later, first must do proper 
+	STAB sd_flag			; store mode for later, first must do proper 
 system shutdown, note long addressing
 ; ask THE braid to terminate
-	LDA B #0			; PID=0 means ALL braids
-	LDA A #SIGTERM		; will be asked to terminate
-	STA A b_sig			; store signal type
+	CLRB			; PID=0 means ALL braids
+	LDAA #SIGTERM		; will be asked to terminate
+	STAA b_sig			; store signal type
 	JMP signal			; ask braids to terminate, needs to return to task until the end
 ; ** the real stuff starts here **
 sd_2nd:
@@ -639,15 +617,15 @@ sd_done:
 ; firmware interface
 ;6800*************************6800
 sd_stat:
-	LDA B #PW_STAT		; suspend
+	LDAB #PW_STAT		; suspend
 sd_fw:
 	_ADMIN(POWEROFF)	; except for suspend, shouldn't return...
 	RTS					; for suspend or not implemented
 sd_off:
-	LDA B #PW_OFF			; poweroff
+	LDAB #PW_OFF			; poweroff
 	BRA sd_fw
 sd_cold:
-	LDA B #PW_COLD		; cold boot
+	LDAB #PW_COLD		; cold boot
 	BRA sd_fw			; will reboot, shared code
 sd_warm:
 	JMP warm			; firmware no longer should take pointer, generic kernel knows anyway
@@ -687,8 +665,7 @@ k_vec:
 	JMP	status		; get execution flags of a task ***eeeeeeeeeek
 	JMP	get_pid		; get PID of current braid ***returns 0
 	JMP	set_handler	; set SIGTERM handler
-	JMP	yield		; give away CPU time for I/O-bound process ***does 
-nothing
+	JMP	yield		; give away CPU time for I/O-bound process ***does nothing
 ; new functionalities TBD
 	JMP	aqmanage	; manage asynchronous task queue
 	JMP	pqmanage	; manage periodic task queue
