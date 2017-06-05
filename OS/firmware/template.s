@@ -36,15 +36,19 @@ fwSize	=	$10000 - fw_start - 256	; compute size NOT including header!
 ; *** end of standard header ***
 #endif
 
-; ********************
-; *** cold restart ***
-; ********************
+; **************************
+; **************************
+; ****** cold restart ******
+; **************************
+; **************************
 ; basic init
 reset:
 	SEI				; cold boot
 	LDS #SPTR		; initialise stack pointer, machine-dependent
 
+; *********************************
 ; *** optional firmware modules ***
+; *********************************
 post:
 
 ; might check ROM integrity here
@@ -53,6 +57,9 @@ post:
 ; SRAM test
 ;#include "firmware/modules/ramtest.s"
 
+; ***********************************
+; *** firmware parameter settings ***
+; ***********************************
 ; *** set default CPU type ***
 	LDAA #'X'			; default 6800 installed
 	STAA fw_cpu			; store variable
@@ -68,7 +75,9 @@ post:
 	STX fw_swi			; new sysvar
 ; as NMI will be validated, no need to preinstall it!
 
-; interrupt frequency should be done via installed kernel!
+; ********************************
+; *** hardware interrupt setup ***
+; ********************************
 ;	LDX #IRQ_FREQ	; interrupts per second
 ;	STX irq_freq	; store speed...
 
@@ -83,7 +92,9 @@ res_sec:
 ;	LDAA #$C0			; enable T1 (jiffy) interrupt only
 ;	STAA VIA_J + IER
 
-; ******* debug code, direct print some string *******
+; **********************************
+; *** direct print splash string ***
+; **********************************
 	LDX #fw_splash				; reset index
 fws_loop:
 		LDAA 0, X	; get char
@@ -94,9 +105,10 @@ fws_loop:
 fws_cr:
 	LDAA #LF				; trailing CR, needed by console!
 	STAA $0F				; visual 6800 output
-; ******* end of debug code **************************
 
-; *** firmware ends, jump into the kernel ***
+; ************************
+; *** start the kernel ***
+; ************************
 start_kernel:
 	LDX fw_warm		; get pointer
 	JMP 0, X			; jump there!
