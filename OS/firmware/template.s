@@ -1,8 +1,8 @@
 ; firmware for minimOS-63
 ; sort-of generic template
-; v0.6a2
+; v0.6a3
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170602-1406
+; last modified 20170605-0935
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -90,7 +90,7 @@ fws_loop:
 			BEQ fws_cr			; no more to print
 		STAA $0F			; visual 6800 output
 		INX					; next char
-		BRA fws_loop	
+		BRA fws_loop
 fws_cr:
 	LDAA #LF				; trailing CR, needed by console!
 	STAA $0F				; visual 6800 output
@@ -104,56 +104,41 @@ start_kernel:
 ; *** vectored NMI handler with magic number ***
 nmi:
 ; registers are saved! but check system pointers
-
-	PSHA					; save registers
-	PSHB
-	
 ; make NMI reentrant
-	LDY sysptr			; get original word 
-	LDX sysptr+1
-	LDA systmp			; this byte only
-	_PHY					; store them in similar order
-	_PHX
-	PHA
-	
+	LDAA systmp			; get original word
+	LDAB systmp+1
+	PSHB					; store them in similar order
+	PSHA
 ; prepare for next routine
-
 	LDX fw_nmi			; get vector to supplied routine
 ; check whether user NMI pointer is valid
-	LDX #3				; offset for (reversed) magic string, no longer preloaded (2)
-	LDY #0				; offset for NMI code pointer (2)
-nmi_chkmag:
-		LDA (sysptr), Y		; get code byte (5)
-		CMP fw_magic, X		; compare with string (4)
-			BNE rst_nmi			; not a valid routine (2/3)
-		INY					; another byte (2)
-		DEX					; internal string is read backwards (2)
-		BPL nmi_chkmag		; down to zero (3/2)
-do_nmi:
-	LDX #0				; null offset
-	JSR nmi_call		; in case no 816 is used!
+	LDAA 0, X			; get first char
+	CMPA #'U'			; matches magic string? REVISE
+		BNE rst_nmi			; error, use standard handler
+	LDAA 1, X			; get second char
+	CMPA #'N'			; matches magic string? REVISE
+		BNE rst_nmi			; error, use standard handler
+	LDAA 2, X			; get third char
+	CMPA #'j'			; matches magic string? REVISE
+		BNE rst_nmi			; error, use standard handler
+	LDAA 3, X			; get fourth char
+	CMPA #'*'			; matches magic string? REVISE
+		BNE rst_nmi			; error, use standard handler
+	JSR 4, X			; routine OK, skip magic string!
 ; *** here goes the former nmi_end routine ***
 nmi_end:
-	PLA					; retrieve saved vars
-	_PLX
-	_PLY
-	STA systmp			; only this byte
-	STX sysptr+1
-
+	PULA					; retrieve saved vars
+	PULB
+	STAB systmp+1			; restore values
+	STAA systmp+1
 	RTI					; resume normal execution, hopefully
-
-nmi_call:
-	_JMPX(fw_nmi)		; call actual code, ending in RTS (6)
-
-fw_magic:
-	.asc	"*jNU"		; reversed magic string
 
 ; *** execute standard NMI handler ***
 rst_nmi:
-	LDA #>nmi_end-1		; prepare return address
-	PHA
-	LDA #<nmi_end-1		; now LSB (safer than PEA)
-	PHA
+	LDAA #<nmi_end		; prepare return address
+	PSHA
+	LDAA #>nmi_end		; now MSB
+	PSHA
 ; ...will continue thru subsequent standard handler, its RTS will get back to ISR exit
 
 ; *** default code for NMI handler, if not installed or invalid, should end in RTS ***
@@ -276,41 +261,66 @@ fw_fgen:
 	_DR_ERR(UNAVAIL)	; not yet implemented
 
 ; *** for higher-specced systems ***
+; but a reduced, non patchable INSTALL is available instead
 #ifndef	LOWRAM
 
 ; INSTALL, copy jump table
 ; kerntab <- address of supplied jump table
 fw_install:
-;6502
-	_ENTER_CS			; disable interrupts! (5)
-	LDY #0				; reset index (2)
+	_ENTER_CS			; disable interrupts!
+	LDAB #0				; reset counter
+	LDX fw_table			; get destination pointer
+	STX systmp			; store temporarily
 fwi_loop:
-		LDA (kerntab), Y	; get word from table as supplied (5)
-		STA fw_table, Y		; copy where the firmware expects it (4)
-		INY					; advance one byte
-		BNE fwi_loop		; until whole page is done (3/2)
-	_EXIT_CS			; restore interrupts if needed, will restore size too (4)
-	_DR_OK				; all done (8)
+		LDX kerntab		; set origin pointer
+		LDAA 0, X		; get byte from table as supplied
+		INX			; increment
+		STX kerntab		; ...and update
+		LDX systmp		; switch to destination
+		STAA 0, X		; copy the byte
+		INX			; increment
+		STX systmp		; ...and update
+		INCB			; advance counter
+		BNE fwi_loop		; until whole page is done
+;	DEC kerntab		; restore original value
+	LDX #fw_table		; the firmware table will be pointed...
+	STX $FC			; ...from the standard address
+	_EXIT_CS			; restore interrupts if needed
+	_DR_OK				; all done
 
 ; PATCH, patch single function
 ; kerntab <- address of code
-; Y <- function to be patched
+; acc B <- function to be patched
 fw_patch:
-	_ENTER_CS				; disable interrupts and save sizes! (5)
-	LDA kerntab				; get full pointer
-	LDX kerntab+1
-	STA fw_table, Y			; store into firmware
-	TXA
-	STA fw_table+1, Y
-	_EXIT_CS				; restore interrupts and sizes (4)
-	_DR_OK					; done (8)
-
+	_ENTER_CS				; disable interrupts
+	ADDB #<fw_table				; compute final LSB
+	STAB systmp+1				; set temporary pointer
+	LDAB #>fw_table				; now for MSB
+	ADCB #0					; propagate carry
+	STAB systmp				; pointer is ready
+	LDX systmp				; set as index
+	LDAA kerntab				; get function MSB
+	LDAB kerntab+1				; and LSB
+	STAA 0, X				; store into firmware
+	STAB 1, X
+	_EXIT_CS				; restore interrupts
+	_DR_OK					; done
+; CONTEXT to do to do **********
+fw_ctx:
+	_DR_ERR(UNAVAIL)	; not yet implemented
 #else
 ; these functions will not work on 128-byte systems!
 fw_install:
+; limited version
+	_ENTER_CS				; disable interrupts
+	LDX kerntab		; the supplied table will be pointed...
+	STX $FC			; ...from the standard address
+	_EXIT_CS				; restore interrupts
+	_DR_OK					; done
+
 fw_patch:
 fw_ctx:
-	_DR_ERR(UNAVAIL)	; not yet implemented
+	_DR_ERR(UNAVAIL)	; not available
 
 #endif
 
@@ -358,9 +368,10 @@ fw_mname:
 	JMP fw_power	; POWEROFF power-off, suspend or cold boot +12
 	JMP fw_fgen		; *** FREQ_GEN frequency generator hardware interface, TBD +15
 
+; a reduced INSTALL is available for LOWRAM system, calling it is mandatory!
+	JMP fw_install	; INSTALL copy jump table +18
 #ifndef	LOWRAM
 ; not for LOWRAM systems
-	JMP fw_install	; INSTALL copy jump table +18
 	JMP fw_patch	; PATCH patch single function (renumbered) +1B
 	JMP fw_ctx		; *** CONTEXT context bankswitching +1E
 #endif
@@ -378,7 +389,7 @@ fw_mname:
 
 ; *** panic routine, locks at very obvious address ($FFE1-$FFE2) ***
 * = lock
-	NOP					; locks at same address as 6502
+	SEI					; locks at same address as 6502
 panic_loop:
 	BRA panic_loop	; always OK
 
