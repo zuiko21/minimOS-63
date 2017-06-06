@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel
 ; v0.6a3
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170606-1114
+; last modified 20170606-1240
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -147,6 +147,7 @@ dr_loop:
 		BNE dr_inst			; cannot be zero, in case is too far for BEQ dr_ok
 			JMP dr_ok			; all done otherwise
 
+; *********************************************************
 ; *** subroutine for putting A as MSB and B as LSB, X+2 ***
 dr_clrio:
 	STAA 0, X			; set MSB for output
@@ -155,6 +156,7 @@ dr_clrio:
 	INX
 	RTS
 ; *** perhaps in another place, try to use BSR ***
+; ************************************************
 
 dr_inst:
 		STX da_ptr			; store pointer to header, *** but check new variable conflicts! ***
@@ -188,30 +190,21 @@ dr_nptsk:
 				BCS dr_nabort			; did not check OK
 dr_nrtsk:
 ; if arrived here, there is room for interrupt tasks, but check init code
-		STAA dr_aut			; *** will save it here for later...
+;		STAA dr_aut			; *** will save it here for later...
 		JSR D_INIT, X		; like dr_icall, call D_INIT routine!
 			BCS dr_nabort		; no way, forget about this
 ; *** 4) driver should be OK to install, just check whether this ID was not in use ***
-		LDAA dr_id			; retrieve saved ID
 
 #ifndef	LOWRAM
-; ++++++ new faster driver list 20151014, revamped 20160406 ++++++
-; ** 6502 ************ 6502 ***************** 6502 *********************
-		ASL					; use retrieved ID as index (2+2)
-		TAX					; was Y
-; new 170518, TASK_DEV is nothing to be checked
-		LDA #<dr_error		; pre-installed LSB (2)
-		CMP drv_opt, X		; check whether in use (4)
-			BNE dr_busy			; pointer was not empty (2/3)
-		CMP drv_ipt, X		; now check input, just in case (4)
-			BNE dr_busy			; pointer was not empty (2/3)
-		LDA #>dr_error		; now look for pre-installed MSB (2)
-		CMP drv_opt+1, X	; check whether in use (4)
-			BNE dr_busy			; pointer was not empty (2/3)
-		CMP drv_ipt+1, X	; now check input, just in case (4)
-		BEQ dr_empty		; it is OK to set (3/2)
+; ++++++ new faster driver list ++++++
+		BSR dr_outptr		; get pointer to output routine
+		CPX #dr_error		; check whether something was installed
+			BNE dr_busy			; pointer was not empty
+		BSR dr_inptr		; get pointer to input routine
+		CPX #dr_error		; check whether something was installed
+		BEQ dr_empty		; it is OK to set
 dr_busy:
-			JMP dr_abort		; already in use (3)
+			JMP dr_abort		; already in use
 
 ; ********************************************
 ; *** subroutine for copy dr_iopt into (X) ***
@@ -271,76 +264,77 @@ dr_nout:
 ; ++++++
 #else
 ; ------ IDs table filling for low-RAM systems ------
-#ifdef	SAFE
 ; check whether the ID is already in use
-; ** 6502 ************ 6502 ***************** 6502 *********************
-		LDY #0				; reset index (2)
-		BEQ dr_limit		; check whether has something to check, no need for BRA (3)
+		LDX #drivers_id		; beginning of ID list
+		LDAA dr_id			; fetch aspiring ID
+		LDAB drv_num		; number of drivers registered this far
+		BEQ dr_eol			; already at end of list
 dr_scan:
-			CMP drivers_id, Y	; compare with list entry (4)
-				BEQ dr_abort		; already in use, don't register! (2/3)
-			INY					; go for next (2)
-dr_limit:	CPY drv_num			; all done? (4)
-			BNE dr_scan			; go for next (3/2)
+#ifdef	SAFE
+			CMPA 0, X			; compare with list entry
+				BEQ dr_abort		; already in use, don't register
 #endif
-		LDX drv_num			; retrieve single offset (4)
-		STA drivers_id, X	; store in list, now in RAM (4)
+			INX					; otherwise try next one
+			DECB				; one less to go
+			BNE dr_scan
+dr_eol:
+; supposedly no conflicting IDs found, or at least pointer set after last one
+		STAA 0, X			; store in list, now in RAM
 ; ------
 #endif
 
-; *** 5) register interrupt routines *** new, much cleaner approach
-		LDA dr_feat			; get original auth code (3)
-		STA dr_aut			; and keep for later! (3)
+; *** 5) register interrupt routines *** new, much cleaner approach ***** REVISE
+		LDAA dr_feat		; get original auth code
+		STAA dr_aut			; and keep for later!
 ; time to get a pointer to the-block-of-pointers (source)
-		LDY #D_POLL			; should be the FIRST of the three words (D_POLL, D_FREQ, D_REQ)
-		JSR dr_gind			; get the pointer into sysptr (move to locals?)
+		LDX da_ptr			; work with current header
+		LDX D_POLL, X		; get this pointer
+		STX sysptr			; store it ***** check!
 ; also a temporary pointer to the particular queue
-		LDA #<drv_poll		; must be the first one!
-		STA dq_ptr			; store temporarily
-		LDA #>drv_poll		; MSB too
-		STA dq_ptr+1
+		LDX #drv_poll		; must be the first one?
+		STX dq_ptr			; store temporarily
 ; new functionality 170519, pointer to (interleaved) task enabling queues
-		LDA #<drv_p_en		; this is the second one, will be decremented for async
-		STA dte_ptr			; yet another temporary pointer...
-		LDA #>drv_p_en		; same for MSB
-		STA dte_ptr+1
-; all set now, now easier to use a loop
-		LDX #1				; index for periodic queue (2)
-/*
+		LDX #drv_p_en		; this is the second one, will be decremented for async?
+		STX dte_ptr			; yet another temporary pointer...
+; all set now, now easier to use a loop, not sure on 6800
+
+		LDAB #1				; index for loop (2)
+
+; ***** 6502 ***************** 6502 ***************** 6502 *****
 dr_iqloop:
-			ASL dr_aut			; extract MSB (will be A_POLL first, then A_REQ)
-			BCC dr_noten		; skip installation if task not enabled
+;			ASL dr_aut			; extract MSB (will be A_POLL first, then A_REQ)
+;			BCC dr_noten		; skip installation if task not enabled
 ; prepare another entry into queue
-				LDY queues_mx, X	; get index of free entry!
-				STY dq_off			; worth saving on a local variable
-				INC queues_mx, X	; add another task in queue
-				INC queues_mx, X	; pointer takes two bytes
+;				LDY queues_mx, X	; get index of free entry!
+;				STY dq_off			; worth saving on a local variable
+;				INC queues_mx, X	; add another task in queue
+;				INC queues_mx, X	; pointer takes two bytes
 ; install entry into queue
-				JSR dr_itask		; install into queue
+;				JSR dr_itask		; install into queue
 ; save for frequency queue, flags must be enabled for this task!
-				LDY dq_off			; get index of free entry!
-				LDA dr_id			; use ID as flags, simplifies search and bit 7 hi (as per physical device) means enabled by default
-				STA (dte_ptr), Y	; set default flags
+;				LDY dq_off			; get index of free entry!
+;				LDA dr_id			; use ID as flags, simplifies search and bit 7 hi (as per physical device) means enabled by default
+;				STA (dte_ptr), Y	; set default flags
 ; let us see if we are doing periodic task, in case frequency must be set also
-				TXA					; doing periodic?
-					BEQ dr_next			; if zero, is doing async queue, thus skip frequencies (in fact, already ended)
-				JSR dr_nextq		; advance to next queue (frequencies)
-				JSR dr_itask		; same for frequency queue
-				_BRA dr_doreq		; nothing to skip, go for async queue
+;				TXA					; doing periodic?
+;					BEQ dr_next			; if zero, is doing async queue, thus skip frequencies (in fact, already ended)
+;				JSR dr_nextq		; advance to next queue (frequencies)
+;				JSR dr_itask		; same for frequency queue
+;				_BRA dr_doreq		; nothing to skip, go for async queue
 dr_noten:
-			JSR dr_nextq		; if periodic was not enabled, this will skip frequencies queue
+;			JSR dr_nextq		; if periodic was not enabled, this will skip frequencies queue
 dr_doreq:
 ; as this will get into async, switch enabling queue
-			LDA dte_ptr			; check previous LSB
-			BNE dr_neqnw		; will wrap upon decrement?
-				DEC dte_ptr+1		; if so, precorrect MSB
+;			LDA dte_ptr			; check previous LSB
+;			BNE dr_neqnw		; will wrap upon decrement?
+;				DEC dte_ptr+1		; if so, precorrect MSB
 dr_neqnw:
-			DEC dte_ptr			; one before as it is interleaved
+;			DEC dte_ptr			; one before as it is interleaved
 ; continue into async queue
-			JSR dr_nextq		; go for next queue
-			DEX					; now 0, index for async queue (2)
-			BPL dr_iqloop		; eeeeek
-*/
+;			JSR dr_nextq		; go for next queue
+;			DEX					; now 0, index for async queue (2)
+;			BPL dr_iqloop		; eeeeek
+
 ; *** 6) continue initing drivers ***
 		BRA dr_next		; if arrived here, did not fail initialisation
 
@@ -348,23 +342,28 @@ dr_abort:
 ; *** if arrived here, driver initialisation failed in some way! ***
 #ifdef	LOWRAM
 ; ------ low-RAM systems keep count of installed drivers ------
-			LDY drv_num			; get failed driver index (4)
-			LDA #DEV_NULL		; make it unreachable, any positive value (logic device) will do (2)
-			STA drivers_id, Y	; delete older value (4)
+			LDX #drivers_id		; beginning of ID list
+			LDAB drv_num		; number of drivers registered this far
+dr_ablst:
+				INX					; advance pointer
+				DECB				; one less
+				BNE dr_ablst		; acc B will never start at 0!
+			LDAB #DEV_NULL		; invalid proper value...
+			STAB 0, X			; ...as unreachable entry
 ; ------
 #endif
 dr_next:
 #ifdef	LOWRAM
 ; ------ low-RAM systems keep count of installed drivers ------
-		INC drv_num			; update SINGLE index (6)
+		INC drv_num			; update SINGLE index
 ; ------
 #endif
 ; in order to keep drivers_ad in ROM, can't just forget unsuccessfully registered drivers...
 ; in case drivers_ad is *created* in RAM, dr_abort could just be here, is this OK with new separate pointer tables?
-		_PLX				; retrieve saved index (4)
-		INX					; update ADDRESS index, even if unsuccessful (2)
-		INX					; eeeeeeeek! pointer arithmetic! (2)
-		JMP dr_loop			; go for next (3)
+		LDX drv_aix			; retrieve saved index
+		INX					; update ADDRESS index, even if unsuccessful
+		INX					; eeeeeeeek! pointer arithmetic!
+		JMP dr_loop			; go for next
 
 ; ***************************
 ; *** points of no return ***
@@ -376,70 +375,54 @@ dr_error:
 ; *** some driver installation routines ***
 ; *****************************************
 
-; * get indirect address from driver pointer table, 13 bytes, 33 clocks *
-; da_ptr pointing to header, Y has the offset in table, returns pointer in sysptr
-dr_gind:
-	LDA (da_ptr), Y		; get address LSB (5)
-	STA sysptr			; store temporarily (3)
-	INY					; same for MSB (2)
-	LDA (da_ptr), Y		; get MSB (5)
-	STA sysptr+1		; store temporarily (3)
-	RTS					; come back!!! (6)
-
+; ***** 6502 ********************* 6502 ************************* 6502 *****
 ; * routine for advancing to next queue *
 ; both pointers in dq_ptr (whole queue) and sysptr (pointer in header)
 dr_nextq:
-	LDA dq_ptr			; get original queue pointer
-	CLC
-	ADC #MAX_QUEUE		; go to next queue
-	STA dq_ptr
-	BCC dnq_nw			; no carry...
-		INC dq_ptr+1		; ...or update MSB
+;	LDA dq_ptr			; get original queue pointer
+;	CLC
+;	ADC #MAX_QUEUE		; go to next queue
+;	STA dq_ptr
+;	BCC dnq_nw			; no carry...
+;		INC dq_ptr+1		; ...or update MSB
 dnq_nw:
-	LDA sysptr			; increment the origin pointer!
-	CLC
-	ADC #2				; next pointer in header
-	STA sysptr			; eeeeeeeeeeek
-	BCC dnq_snw			; no carry...
-		INC sysptr+1		; ...or update MSB
+;	LDA sysptr			; increment the origin pointer!
+;	CLC
+;	ADC #2				; next pointer in header
+;	STA sysptr			; eeeeeeeeeeek
+;	BCC dnq_snw			; no carry...
+;		INC sysptr+1		; ...or update MSB
 dnq_snw:
 	RTS
 
 ; * routine for copying a pointer from header into a table *
-; X is 0 for async, 1 for periodic, sysptr, dq_off & dq_ptr set as usual
+; sysptr & dq_ptr (updated) set as usual
 dr_itask:
+; *** preliminary 6800 version, room to optimise ***
 ; read pointer from header
-	LDY #1				; preset offset
-	LDA (sysptr), Y		; get MSB from header
-	PHA					; stack it!
-	_LDAY(sysptr)		; non-indexed indirect, get LSB in A
+	LDX sysptr			; get set pointer
+	LDAA 0, X			; indirect read MSB
+	LDAB 1, X			; and LSB
 ; write pointer into queue
-	LDY dq_off			; get index of free entry!
-	STA (dq_ptr), Y		; store into reserved place!
-	INY					; go for MSB
-	PLA					; was stacked!
-	STA (dq_ptr), Y
+	LDX dq_ptr			; switch pointer (will be updated, not using dq_off)
+	STAA 0, X			; store fetched task pointer
+	STAB 1, X			; LSB too
+	INX					; go for next entry
+	INX
+	STX dq_ptr			; this has to be updated
 	RTS
 
 ; ***************************************************************
 ; *** drivers already installed, clean up things and continue ***
 ; ***************************************************************
 dr_ok:					; *** all drivers inited ***
-	PLA					; discard stored X, no hassle for NMOS
-#ifdef	LOWRAM
-; ------ terminate ID list ------ is this REALLY necessary?
-	LDX drv_num			; retrieve single index (4)
-	_STZA drivers_id, X	; terminate list, and we are done! (4)
-; ------
-#endif
-
+; really no need to terminate ID list on LOWRAM systems
 
 ; **********************************
 ; ********* startup code ***********
 ; **********************************
 
 ; in case no I/O lock arrays were initialised... only for LOWRAM
-;6800**************************6800
 #ifdef	LOWRAM
 	CLR cin_mode		; single flag for non-multitasking systems
 #endif
@@ -449,7 +432,7 @@ dr_ok:					; *** all drivers inited ***
 	LDX #DEVICE*257			; as defined in options.h
 	STX default_in		; set word
 
-; *** interrupt setup no longer here, firmware did it! *** 20150605
+; *** interrupt setup no longer here, firmware did it! ***
 
 ; new, show a splash message ever the kernel is restarted!
 	JSR ks_cr			; leading newline
