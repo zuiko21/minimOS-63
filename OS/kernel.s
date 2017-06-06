@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel
-; v0.6a2
+; v0.6a3
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170605-1933
+; last modified 20170606-1114
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -35,12 +35,12 @@ kern_head:
 	.asc	"****", 13		; flags TBD
 	.asc	"kernel", 0		; filename
 kern_splash:
-	.asc	"minimOS-63 0.6a2", 0	; version in comment
+	.asc	"minimOS-63 0.6a3", 0	; version in comment
 
 	.dsb	kern_head + $F8 - *, $FF	; padding
 
-	.word	$9800	; time, 19.00
-	.word	$4AC5	; date, 2017/6/5
+	.word	$5280	; time, 10.20
+	.word	$4AC6	; date, 2017/6/6
 
 kern_siz = kern_end - kern_head - $FF
 
@@ -113,72 +113,90 @@ ram_init:
 #else
 ; ++++++ new direct I/O tables for much faster access 20160406 ++++++
 	CLR run_pid			; new 170222, set default running PID *** this must be done BEFORE initing drivers as multitasking should place appropriate temporary value via SET_CURR!
-;****6502***************************6502********************
-dr_clear:
-		_STZA cio_lock, X	; clear I/O locks! (4)
-		_STZA cin_mode, X	; and binary flags, actually next address (4)
-		LDA #<dr_error		; make unused entries point to a standard error routine, new 20160406 (2)
-		STA drv_opt, X		; set LSB for output (4)
-		STA drv_ipt, X		; and for input (4)
-		INX					; go for MSB (2)
-		LDA #>dr_error		; had to keep it inside because no STY abs,X!!!
-		STA drv_opt, X		; set MSB for output (4)
-		STA drv_ipt, X		; and for input (4)
-		INX					; next entry (2)
-		BNE dr_clear		; finish page (3/2)
-; TASKDEV is no longer a thing...
+	LDAA #>dr_error		; make unused entries point to a standard error routine
+	LDAB #<dr_error		; the LSB too
+; *** reset all tables ***
+	LDX #drv_opt		; output routines handler
+dr_oclear:
+		BSR dr_clrio		; shared code!
+		CPX #drv_opt+256	; all done?
+		BNE dr_oclear
+	LDX #drv_ipt		; input routines handler
+dr_iclear:
+		BSR dr_clrio		; shared code!
+		CPX #drv_ipt+256	; all done?
+		BNE dr_iclear
+	LDX #cio_lock		; will clear I/O locks and binary flags!
+	CLRA				; zero is to be stored, both arrays interleaved!
+	CLRB
+dr_lclear:
+		BSR dr_clrio		; shared code!
+		CPX #cio_lock+256	; all done?
+		BNE dr_lclear
 ; ++++++
 #endif
 
 ; *** 2) prepare access to each driver header ***
 ; first get the pointer to each driver table
+drv_aix = systmp		; temporary pointer, *** might go into locals ***
+
+	LDX #drivers_ad		; driver table in ROM
 dr_loop:
-		_PHX				; keep current value, no longer drv_aix (3)
-		LDA drivers_ad+1, X	; get address MSB (4)
-		BNE dr_inst			; cannot be in zeropage, in case is too far for BEQ dr_ok (3/2)
-			JMP dr_ok			; all done otherwise (0/4)
+		STX drv_aix			; reset index (may change in future as X)
+		LDX 0, X			; get current pointer
+		BNE dr_inst			; cannot be zero, in case is too far for BEQ dr_ok
+			JMP dr_ok			; all done otherwise
+
+; *** subroutine for putting A as MSB and B as LSB, X+2 ***
+dr_clrio:
+	STAA 0, X			; set MSB for output
+	STAB 1, X			; and LSB
+	INX					; next word
+	INX
+	RTS
+; *** perhaps in another place, try to use BSR ***
+
 dr_inst:
-		STA da_ptr+1		; store pointer MSB (3)
-		LDA drivers_ad, X	; same for LSB (4+3)
-		STA da_ptr
-; create entry on IDs table ** new 20150219
-		LDY #D_ID			; offset for ID (2)
-		LDA (da_ptr), Y		; get ID code (5)
-		STA dr_id			; keep in local variable as will be often used
+		STX da_ptr			; store pointer to header, *** but check new variable conflicts! ***
+; create entry on IDs table
+		LDAA D_ID, X		; get ID code (5)
+		STAA dr_id			; keep in local variable as will be often used
 #ifdef	SAFE
 		BMI dr_phys			; only physical devices (3/2)
 			JMP dr_abort		; reject logical devices (3)
 dr_phys:
 #endif
-		LDY #D_AUTH			; let us get the provided features
-		LDA (da_ptr), Y
-		STA dr_feat			; another commonly used value
-		STA dr_aut			; also into temporary variable for checking
+		LDAA D_AUTH, X		; get provided features
+		STAA dr_feat		; another commonly used value (will stay during check)
 
 ; *** 3) before registering, check whether the driver COULD be successfully installed ***
 ; that means 1) there must be room enough on the interrupt queues for its tasks, if provided
 ; and 2) the D_INIT routine succeeded as usual
 ; otherwise, skip the installing procedure altogether for that driver
-		LDX #2				; number of queues
-dr_chk:
-			ASL dr_aut			; extract MSB (will be A_POLL first, then A_REQ)
-			BCC dr_ntsk			; skip verification if task not enabled
-				LDY queues_mx-1, X	; get current tasks in queue
-				CPY #MAX_QUEUE		; room for another?
-				BCC dr_ntsk			; yeah!
+		ASLA				; extract MSb (will be A_POLL first) *** no longer using dr_aut
+		BCC dr_nptsk		; skip verification if task not enabled
+			LDAB queues_mx+1	; get current tasks in P queue
+			CMPB #MAX_QUEUE		; room for another?
+			BCC dr_ntsk			; yeah! will this work on 6800 too??
 dr_nabort:
-					JMP dr_abort		; or did not checked OK
-dr_ntsk:
-			DEX					; let us check next feature
-			BNE dr_chk
+				JMP dr_abort		; or did not checked OK
+dr_nptsk:
+		ASL					; extract MSb (now is A_REQ) *** no longer using dr_aut
+		BCC dr_nrtsk		; skip verification if task not enabled
+			LDAB queues_mx	; get current tasks in R queue
+			CMPB #MAX_QUEUE		; room for another?
+				BCS dr_nabort			; did not check OK
+dr_nrtsk:
 ; if arrived here, there is room for interrupt tasks, but check init code
-		JSR dr_icall		; call routine (6+...)
+		STAA dr_aut			; *** will save it here for later...
+		JSR D_INIT, X		; like dr_icall, call D_INIT routine!
 			BCS dr_nabort		; no way, forget about this
 ; *** 4) driver should be OK to install, just check whether this ID was not in use ***
-		LDA dr_id			; retrieve saved ID
+		LDAA dr_id			; retrieve saved ID
 
 #ifndef	LOWRAM
 ; ++++++ new faster driver list 20151014, revamped 20160406 ++++++
+; ** 6502 ************ 6502 ***************** 6502 *********************
 		ASL					; use retrieved ID as index (2+2)
 		TAX					; was Y
 ; new 170518, TASK_DEV is nothing to be checked
@@ -194,34 +212,68 @@ dr_ntsk:
 		BEQ dr_empty		; it is OK to set (3/2)
 dr_busy:
 			JMP dr_abort		; already in use (3)
+
+; ********************************************
+; *** subroutine for copy dr_iopt into (X) ***
+; uses acc B and restores X as da_ptr
+dr_setpt:
+	LDAB dr_iopt		; get MSB
+	STAB 0, X			; write it!
+	LDAB dr_iopt+1		; LSB too
+	STAB 1, X
+	LDX da_ptr			; restore header pointer
+	RTS
+
+; *** locate entry for input according to ID ***
+dr_inptr:
+	LDAB dr_id			; take original ID... or preset parameter!
+	ASLB				; times two, as is index to pointers
+	ADDB #<drv_ipt		; add to LSB
+	STAB systmp+1		; *** is this already used??? ***
+	LDAB #>drv_ipt		; now for MSB
+	BRA dr_iopx			; common ending!
+
+; *** locate entry for output according to ID ***
+dr_outptr:
+	LDAB dr_id			; take original ID... or preset parameter!
+	ASLB				; times two, as is index to pointers
+	ADDB #<drv_opt		; add to LSB
+	STAB systmp+1		; *** is this already used??? ***
+	LDAB #>drv_opt		; now for MSB
+dr_iopx:
+	ADCB #0				; propagate carry
+	STAB systmp
+	LDX systmp			; get final pointer
+	RTS
+; *** end of subroutines ***
+; **************************
+
+; *** continue installation ***
 dr_empty:
 
 ; *** 4b) Set I/O pointers (if memory allows) ***
-; can do this in a loop, just advancing the pointers... now 38b
 ; might check here whether I/O are provided!
-;		ASL dr_aut			; look for CIN (5)
+;		LDAA dr_aut			; *** continue with bit shifting!
+;		ASLA				; look for CIN
 ;		BCC dr_seto			; no input for this!
-			LDY #D_CIN			; same for input routine (2)
-			JSR dr_gind			; get indirect address
-			LDA sysptr			; get driver table LSB (3)
-			STA drv_ipt, X		; store in table (4)
-			LDA sysptr+1		; same for MSB (3+4)
-			STA drv_ipt+1, X
+			LDX D_CIN, X		; get input routine address, this X=6502 sysptr
+			STX dr_iopt			; *** new temporary, will hold address to write into entry
+			BSR dr_inptr		; locate entry for input according to ID! X points to entry
+			BSR dr_setpt		; using B, copy dr_iopt into (X)
 dr_seto:
 ;		ASL dr_aut			; look for COUT (5)
 ;		BCC dr_nout			; no output for this!
-			LDY #D_COUT			; offset for output routine (2)
-			JSR dr_gind			; get indirect address
-			LDA sysptr			; get driver table LSB (3)
-			STA drv_opt, X		; store in table (4)
-			LDA sysptr+1		; same for MSB (3+4)
-			STA drv_opt+1, X
+			LDX D_COUT, X		; get output routine address, this X=6502 sysptr
+			STX dr_iopt			; *** new temporary, will hold address to write into entry
+			BSR dr_outptr		; locate entry for output according to ID! X points to entry
+			BSR dr_setpt		; using B, copy dr_iopt into (X)
 dr_nout:
 ; ++++++
 #else
 ; ------ IDs table filling for low-RAM systems ------
 #ifdef	SAFE
 ; check whether the ID is already in use
+; ** 6502 ************ 6502 ***************** 6502 *********************
 		LDY #0				; reset index (2)
 		BEQ dr_limit		; check whether has something to check, no need for BRA (3)
 dr_scan:
@@ -319,20 +371,6 @@ dr_next:
 ; ***************************
 dr_error:
 	_DR_ERR(N_FOUND)	; standard exit for non-existing drivers!
-
-dr_icall:
-	LDY #D_INIT			; original pointer offset (2)
-; *** generic driver call, pointer set at da_ptr, Y holds table offset *** new 20150610, revised 20160412
-; takes 10 bytes, 29 clocks
-dr_call:
-	INY					; get MSB first (2)
-	LDA (da_ptr), Y		; destination pointer MSB (5)
-	PHA					; push it (3)
-	DEY					; go for LSB (2)
-	LDA (da_ptr), Y		; repeat procedure (5)
-	PHA					; push LSB (3)
-	PHP					; 816 is expected to be in emulation mode anyway (3)
-	RTI					; actual jump (6)
 
 ; *****************************************
 ; *** some driver installation routines ***
@@ -467,7 +505,7 @@ k_isr:
 ; in headerless builds, keep at least the splash string
 #ifdef	NOHEAD
 kern_splash:
-	.asc	"minimOS-63 0.6a2", 0
+	.asc	"minimOS-63 0.6a3", 0
 #endif
 
 kern_end:		; for size computation
