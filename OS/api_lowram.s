@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel API for LOWRAM systems
-; v0.6a2
+; v0.6a3
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170605-2028
+; last modified 20170606-0858
 
 ; *** dummy function, non implemented ***
 unimplemented:		; placeholder here, not currently used
@@ -39,13 +39,13 @@ cio_of = da_ptr			; parameter switching between CIN and COUT
 ; da_ptr globally defined, cio_of not needed upon calling dr_call!
 
 cout:
-	LDAA #D_COUT			; only difference from cin (2)
+	LDAA #D_COUT		; only difference from cin (2)
 	STAA cio_of			; store for further indexing (3)
-	TSTB					; for indexed comparisons (2)
+	TSTB				; for indexed comparisons (2)
 	BNE co_port			; not default (3/2)
 		LDAB stdout			; default output device (3)
 	BNE co_port			; eeeeeeeeeek
-		LDAB #DEVICE			; *** somewhat ugly hack ***
+		LDAB #DEVICE		; *** somewhat ugly hack ***
 co_port:
 	BMI cio_phys		; not a logic device (3/2)
 ; no need to check for windows or filesystem
@@ -90,11 +90,11 @@ cio_dev:
 cin:
 	LDAA #D_CIN			; only difference from cout
 	STAA cio_of			; store for further addition
-	TSTB					; for indexed comparisons
+	TSTB				; for indexed comparisons
 	BNE ci_port			; specified
 		LDAB std_in			; default input device
 	BNE ci_port			; eeeeeeeeeek
-		LDAB #DEVICE			; *** somewhat ugly hack ***
+		LDAB #DEVICE		; *** somewhat ugly hack ***
 ci_port:
 	BPL ci_nph			; logic device
 		JSR cio_phys		; check physical devices... but come back for events! new 20150617
@@ -142,7 +142,7 @@ ci_nph:
 
 ci_rnd:
 ; *** generate random number (6800) ***
-	LDAA ticks+1			; simple placeholder
+	LDAA ticks+1		; simple placeholder
 	STAA io_c			; eeeeeeek
 	_EXIT_OK
 
@@ -159,10 +159,11 @@ ci_rnd:
 ; C	= not supported/not available
 
 open_w:
-	LDAA w_rect			; asking for some size?
-	ORAA w_rect+1
+	LDX w_rect			; asking for some size? takes 16-bit
 	BEQ ow_no_window	; wouldn't do it
 		_ERR(NO_RSRC)
+ow_no_window:
+; ...and continue into following functions, returning just 0 in acc B
 
 ; *************************************
 ; ***** GET_PID, get current PID ******
@@ -181,7 +182,6 @@ open_w:
 ;		INPUT
 ; acc B = dev
 
-ow_no_window:
 get_pid:
 b_fork:
 	LDAB #0				; no multitasking, system reserved PID
@@ -199,14 +199,14 @@ free_w:
 ; up_sec	= 32b uptime in seconds
 
 uptime:
-	_ENTER_CS		; do not change while copying, A is preserved (4)
-	LDX ticks		; get system variable word (5)
+	_ENTER_CS			; do not change while copying, A is preserved (4)
+	LDX ticks			; get system variable word (5)
 	STX up_ticks		; and store them in output parameter (5)
-	LDX ticks+2		; get system variable word (5)
-	STX up_sec		; and store them in output parameter (5)
-	LDX ticks+4		; get system variable last word (5)
+	LDX ticks+2			; get system variable word (5)
+	STX up_sec			; and store them in output parameter (5)
+	LDX ticks+4			; get system variable last word (5)
 	STX up_sec+2		; and store it in output parameter (5)
-	_EXIT_CS		; A was preserved (2)
+	_EXIT_CS			; A was preserved (2)
 	_EXIT_OK
 
 
@@ -223,15 +223,15 @@ uptime:
 b_exec:
 ; non-multitasking version
 #ifdef	SAFE
-	TSTB					; should be system reserved PID
+	TSTB				; should be system reserved PID
 	BEQ ex_st			; OK for single-task system
 		_ERR(NO_RSRC)		; no way without multitasking
 ex_st:
 #endif
 	LDS #SPTR			; init stack
 ; set default SIGTERM handler! eeeeeeeeeeeeeeeeeeeeek
-	LDX #sig_kill			; default TERM
-	STX mm_sterm			; set variable
+	LDX #sig_kill		; default TERM
+	STX mm_sterm		; set variable
 ; this is how a task should replace the shell
 	LDAA #ZP_AVAIL		; eeeeeeeeeeek
 	STAA z_used			; otherwise SAFE will not work
@@ -267,7 +267,7 @@ rst_shell:
 
 signal:
 #ifdef	SAFE
-	TSTB					; check correct PID, really needed?
+	TSTB				; check correct PID, really needed?
 		BNE sig_pid			; strange error?
 #endif
 	LDAA b_sig			; get the signal
@@ -275,7 +275,7 @@ signal:
 	BNE sig_suic
 ; 6800 SIGTERM handlers end in RTS, thus a pretty standard jump is OK
 		LDX mm_sterm		; pointer to handler
-		JMP 0, X		; will return to caller
+		JMP 0, X			; will return to caller
 sig_suic:
 	CMPA #SIGKILL		; suicide?
 		BEQ sig_kill
@@ -290,14 +290,15 @@ sig_pid:
 ; acc B	= addressed braid
 ;		OUTPUT
 ; acc B	= flags ***TBD
-; C	= invalid PID
+; C		= invalid PID
 
 status:
 #ifdef	SAFE
-	TSTB					; check PID
+	TSTB				; check PID
 		BNE sig_pid			; only 0 accepted
 #endif
-	LDAB #BR_RUN			; single-task systems are always running
+	LDAB #BR_RUN		; single-task systems are always running
+; might include some architecture information...
 sig_exit:
 	_EXIT_OK
 
@@ -307,9 +308,9 @@ sig_exit:
 ; **************************************************************
 ;		INPUT
 ; acc B	= PID (0 means to myself)
-; ex_pt = SIGTERM handler routine (ending in RTS)
+; ex_pt	= SIGTERM handler routine (ending in RTS)
 ;		OUTPUT
-; C = bad PID
+; C		= bad PID
 
 set_handler:
 #ifdef	SAFE
@@ -328,97 +329,101 @@ set_handler:
 ; str_pt	= pointer to filename path (will be altered!)
 ;		OUTPUT
 ; ex_pt		= pointer to executable code
-;		USES rh_scan
+;		USES rh_scan AND loc_str (new 20170606)
 
 load_link:
-;6502******************************************************************
 ; *** look for that filename in ROM headers ***
-; first of all, correct parameter pointer as will be aligned with header!
-	LDA str_pt			; get LSB
-	SEC
-	SBC #8				; subtract name position in header! beware of 816 non-wrapping!
-	STA str_pt			; modified value
-	BCS ll_reset		; nothing else to do if no borrow
-		DEC str_pt+1		; otherwise will point to previous PAGE eeeeeeek
-ll_reset:
-; get initial address! beacuse of the above, no longer adds filename offset!
-	LDA #<ROM_BASE		; begin of ROM contents LSB, most likely zero
-	STA	rh_scan			; set local pointer
-	LDA #>ROM_BASE		; same for MSB
-	STA rh_scan+1		; internal pointer set
+; get initial scanning address as local variable
+	LDX #ROM_BASE		; begin of ROM contents
+	STX	rh_scan			; set local pointer
 ll_geth:
+; no need to correct parameter pointer as will use independent pointers anyway
+		LDX str_pt			; get string pointer
+		STX loc_str			; temporary internal pointer
+		LDX rh_scan			; *** reload scanning address ***
 ; ** check whether we are on a valid header!!! **
-		_LDAY(rh_scan)		; first of all should be a NUL
+		LDAA 0, X			; first of all should be a NUL
+#ifdef	SAFE
+		ORAA 254, X			; last word is CLEAR on 6800 architecture
+		ORAA 255, X			; ***or put the whole 32-bit as big-endian?***
+#endif 
 			BNE ll_nfound		; link was lost, no more to scan
-		LDY #7				; after type and size, a CR is expected
-		LDA (rh_scan), Y	; get eigth byte in header!
-		CMP #CR				; was it a CR?
+		LDAA 7, X			; after type and size, get eigth byte in header
+		CMPA #CR			; was it a CR?
 			BNE ll_nfound		; if not, go away
 ; look for the name
-		INY					; reset scanning index (now at name position, was @7)
 ll_nloop:
-			LDA (rh_scan), Y	; get character in found name
-			CMP (str_pt), Y		; compare with what we are looking for
+			LDAA 8, X			; get character in found name from its offset
+			LDX loc_str			; switch to name pointer
+			CMPA 0, X			; compare with what we are looking for
 				BNE ll_nthis		; difference found
-			ORA (str_pt), Y		; otherwise check whether at EOL
-				BEQ ll_found		; all were zero, both ended names are the same!
-			INY					; otherwise continue search
-			BNE ll_nloop		; will not do forever, no need for BRA
+			INX					; advance this local name pointer...
+			STX loc_str			; ...update stored...
+			LDX rh_scan			; ...and switch back to header pointer
+			TST 8, X			; otherwise check whether at EOL
+				BEQ ll_found		; all were zero, both ended names are the same! note different offset
+			INX					; otherwise continue scanning
+			STX rh_scan			; ...and update...
+			BRA ll_nloop		; will not do forever until aborted
 ll_nthis:
 ; not this one, correct local pointer for the next header
-		LDY #253			; relative offset to number of pages
-		LDA (rh_scan), Y	; get it now
-		TAX					; save for a while
-		DEY					; relative offset to FILE SIZE eeeeek
-		LDA (rh_scan), Y	; check whether crosses boundary
-		BEQ ll_bound		; if it does not, do not advance page
-			INX					; otherwise goes into next page
+		CLR rh_scan+1		; reset LSB, assuming page-aligned headers!
+		LDX rh_scan			; get full pointer to current header
+		LDAA 252, X			; relative offset to number of pages
+		LDAB 253, X			; also number of bytes (***last word is unused!***)
+		BEQ ll_bound		; if it does not cross boundary, do not advance page
+			INCA				; otherwise goes into next page
 ll_bound:
-		TXA					; retrieve number of pages to skip...
-		SEC					; ...plus header itself! eeeeeeek
-		ADC rh_scan+1		; add to previous value
-		STA rh_scan+1		; update pointer
-		BCC ll_geth			; inspect new header (if no overflow! 16-bit addressing)
+		INCA				; skip header too!
+		ADDA rh_scan		; add to previous value
+		STAA rh_scan		; update pointer
+		CLR rh_scan+1		; keep it page-aligned!
+		BCC ll_geth			; inspect new header (if no overflow!)
 ll_nfound:
 	_ERR(N_FOUND)		; all was scanned and the query was not found
 ll_found:
-; original LOADLINK code
-	LDY #1				; offset for filetype
-	LDA (rh_scan), Y	; check filetype
-	CMP #'m'			; must be minimOS app!
+; from original LOADLINK code
+	CLR rh_scan+1		; reset LSB, assuming page-aligned headers!
+	LDX rh_scan			; only header pointer will get used from here
+	LDAA 1, X			; check filetype
+	CMPA #'m'			; must be minimOS app!
 		BNE ll_wrap		; error otherwise
-	INY					; next byte is CPU type
-	LDA (rh_scan), Y	; get it
+	LDAA 2, X			; next byte is CPU type
 ; check compability of supplied code against present CPU
-	LDX fw_cpu			; *** UGLY HACK, this is a FIRMWARE variable ***
-	CPX #'R'			; is it a Rockwell/WDC CPU?
-		BEQ ll_rock			; from R down is OK
-	CPX #'B'			; generic 65C02?
-		BEQ ll_cmos			; from B down is OK
-	CPX #'V'			; 65816 is supported but no better than a generic 65C02
-		BEQ ll_cmos
-	CPX #'N'			; old NMOS?
-	BEQ ll_nmos			; only NMOS code will do
-		_PANIC("{CPU?}")	; *** should NEVER arrive here, unless firmware variables are corrupt! ***
-ll_rock:
-	CMP #'R'			; code has Rockwell extensions?
-		BEQ ll_valid
-ll_cmos:
-	CMP #'B'			; generic 65C02 code?
-		BEQ ll_valid
-ll_nmos:
-	CMP #'N'			; every supported CPU can run NMOS code
-		BNE ll_wrap			; otherwise is code for another architecture!
+	LDAB fw_cpu			; *** UGLY HACK, this is a FIRMWARE variable ***
+	CMPB #'H'			; is it a 68HC11 MCU?
+		BEQ ll_hc11			; all Motorola is OK, but not Hitachi!
+	CMPB #'K'			; Hitachi microcontroller?
+		BEQ ll_hitachi		; native and 6803 down is OK
+	CMPB #'U'			; Motorola 6801/6803 microcontroller?
+		BEQ ll_mcu			; 6800-6803 only
+	CMPB #'M'			; old plain 6800/6802/6808?
+		BEQ ll_basic			; only basic code will do
+	_PANIC("{CPU?}")	; *** should NEVER arrive here, unless firmware variables are corrupt! ***
+ll_hc11:
+	CMPA #'H'			; code has HC11 extensions?
+		BEQ ll_valid		; that is OK...
+		BRA ll_mcu			; ...but skip Hitachi code
+ll_hitachi:
+	CMPA #'K'			; Hitachi code?
+		BEQ ll_valid		; this and old MCU code will do
+ll_mcu:
+	CMPA #'U'			; 6801/6803 code?
+		BEQ ll_valid		; will tolerate old 6800 too
+ll_basic:
+	CMPA #'M'			; every supported CPU can run 6800 code
+	BEQ ll_valid		; otherwise is code for another architecture!
+ll_wrap:
+		_ERR(INVALID)		; something was wrong
 ; present CPU is able to execute supplied code
 ll_valid:
-	LDA rh_scan			; get pointer LSB
-	LDY rh_scan+1		; and MSB
-	INY					; start from next page
-	STA ex_pt			; save execution pointer
-	STY ex_pt+1
+	LDAA rh_scan		; get pointer MSB
+;	LDAB rh_scan+1		; and MSB (should be zero!)
+	INCA				; start from next page, skipping header
+	STAA ex_pt			; save execution pointer
+;	STAB ex_pt+1		; LSB too
+	CLR ex_pt+1			; assuming page-aligned headers
 	_EXIT_OK
-ll_wrap:
-	_ERR(INVALID)		; something was wrong
 
 
 ; *********************************
@@ -578,10 +583,10 @@ shutdown:
 		BEQ sd_stat			; don't shutdown system then!
 	CMPB #PW_CLEAN		; from end of main task
 		BEQ sd_2nd			; continue with second stage
-	STAB sd_flag			; store mode for later, first must do proper 
+	STAB sd_flag		; store mode for later, first must do proper 
 system shutdown, note long addressing
 ; ask THE braid to terminate
-	CLRB			; PID=0 means ALL braids
+	CLRB				; PID=0 means ALL braids
 	LDAA #SIGTERM		; will be asked to terminate
 	STAA b_sig			; store signal type
 	JMP signal			; ask braids to terminate, needs to return to task until the end
@@ -609,40 +614,45 @@ sd_loop:
 		JSR dr_call			; call routine from generic code!
 		_PLX				; retrieve index
 		BNE sd_loop			; repeat until zero
+; ***************************************************
+
 ; ** system cleanly shut, time to let the firmware turn-off or reboot **
 sd_done:
-	LDX sd_flag			; retrieve mode as index!
-	_JMPX(sd_tab-2)		; do as appropriate *** note offset as sd_stat will not be called from here
-
-; firmware interface
-;6800*************************6800
-sd_stat:
-	LDAB #PW_STAT		; suspend
+	LDAB sd_flag		; retrieve mode
+	CMPB #PW_STAT		; suspend?
+		BEQ sd_fw			; tell firmware!
+	CMPB #PW_OFF		; poweroff?
+		BEQ sd_fw			; tell firmware!
+	CMPB #PW_COLD		; cold boot?
+		BEQ sd_fw			; tell firmware!
+	CMPB #PW_WARM		; just a warm restart?
+	BEQ sd_warm			; will not tell firmware, just jump there
+		_ERR(INVALID)		; unrecognised command!
+sd_warm:
+	JMP warm			; firmware no longer should take pointer, generic kernel knows anyway
 sd_fw:
 	_ADMIN(POWEROFF)	; except for suspend, shouldn't return...
 	RTS					; for suspend or not implemented
-sd_off:
-	LDAB #PW_OFF			; poweroff
-	BRA sd_fw
-sd_cold:
-	LDAB #PW_COLD		; cold boot
-	BRA sd_fw			; will reboot, shared code
-sd_warm:
-	JMP warm			; firmware no longer should take pointer, generic kernel knows anyway
-
-sd_tab:
-;	.word	sd_stat		; suspend *** no needed as will be called directly, check offset above
-	.word	sd_warm		; warm boot direct by kernel
-	.word	sd_cold		; cold boot via firmware
-	.word	sd_off		; poweroff system
 
 ; *******************************
 ; *** end of kernel functions ***
 ; *******************************
 
-; jump table, if not in separate 'jump' file
+; *******************************
+; *** other data and pointers ***
+; *******************************
+
+; ****************************
+; *** end of kernel tables ***
+; ****************************
+
+; **************************************************
+; *** JUMP table, if not in separate 'jump' file ***
+; **************************************************
+
 ; *** order MUST match abi.h ***
--fw_table:				; 128-byte systems' firmware get unpatchable table from here, new 20150318
+;-fw_table:				; 128-byte systems' firmware get unpatchable table from here, new 20150318
+; 6800 LOWRAM systems may just update the kern_ptr variable, without a firmware-owned table
 k_vec:
 ; basic I/O
 	JMP	cout		; output a character

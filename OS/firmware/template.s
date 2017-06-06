@@ -2,7 +2,7 @@
 ; sort-of generic template
 ; v0.6a4
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170605-2042
+; last modified 20170606-1009
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -25,14 +25,14 @@ fw_mname:
 	.dsb	fw_start + $F8 - *, $FF	; for ready-to-blow ROM, advance to time/date field
 
 ; *** date & time in MS-DOS format at byte 248 ($F8) ***
-	.word	$A000			; time, 20.00
-	.word	$4AC5			; date, 2017/6/1
+	.word	$A000				; time, 20.00
+	.word	$4AC5				; date, 2017/6/1
 
 fwSize	=	$10000 - fw_start - 256	; compute size NOT including header!
 
 ; filesize in top 32 bits NOT including header, new 20161216
-	.word	fwSize			; filesize
-	.word	0				; 64K space does not use upper 16-bit
+	.word	fwSize				; filesize
+	.word	0					; 64K space does not use upper 16-bit
 ; *** end of standard header ***
 #endif
 
@@ -43,8 +43,8 @@ fwSize	=	$10000 - fw_start - 256	; compute size NOT including header!
 ; **************************
 ; basic init
 reset:
-	SEI				; cold boot
-	LDS #SPTR		; initialise stack pointer, machine-dependent
+	SEI					; cold boot
+	LDS #SPTR			; initialise stack pointer, machine-dependent
 
 ; *********************************
 ; *** optional firmware modules ***
@@ -61,7 +61,7 @@ post:
 ; *** firmware parameter settings ***
 ; ***********************************
 ; *** set default CPU type ***
-	LDAA #'X'			; default 6800 installed
+	LDAA #'M'			; default 6800 installed
 	STAA fw_cpu			; store variable
 ; ...but check it for real afterwards, at least rejecting 6809
 #include	"firmware/modules/cpu_check.s"
@@ -98,7 +98,7 @@ res_sec:
 ; **********************************
 	LDX #fw_splash		; reset index
 fws_loop:
-		LDAA 0, X	; get char
+		LDAA 0, X			; get char
 			BEQ fws_cr			; no more to print
 		STAA $0F			; visual 6800 output
 		INX					; next char
@@ -106,6 +106,8 @@ fws_loop:
 fws_cr:
 	LDAA #CR			; trailing CR, needed by console!
 	STAA $0F			; visual 6800 output
+
+; *** might try to download a kernel just here, updating fw_warm accordingly ***
 
 ; ************************
 ; *** start the kernel ***
@@ -180,7 +182,7 @@ std_nmi:
 ; str_pt	= points to a string with machine name
 ; ex_pt		= points to a map of default memory conf ???
 ; k_ram		= available pages of (kernel) SRAM
-; *** WILL change ABI/API ***REVISE
+; *** MAY change ABI/API ***REVISE
 
 fw_gestalt:
 
@@ -197,28 +199,31 @@ fw_gestalt:
 	STX ex_pt			; set output
 	_DR_OK				; done
 
+
 ; SET_ISR, set IRQ vector
 ;		INPUT
 ; kerntab	= address of ISR (will take care of all necessary registers)
 
 fw_s_isr:
 ; no CS as STX is atomic!
-	LDX kerntab				; get pointer
-	STX fw_isr				; store for firmware
-	_DR_OK					; done
+	LDX kerntab			; get pointer
+	STX fw_isr			; store for firmware
+	_DR_OK				; done
+
 
 ; SET_NMI, set NMI vector
 ;		INPUT
 ; kerntab	= address of NMI code (including magic string, ends in RTS)
 
 ; might check whether the pointed code starts with the magic string
+; as the magic string will NOT get "executed", can safely be the same as 6502
 ; no CS as STX is atomic!
 
 fw_s_nmi:
 	LDX kerntab			; get pointer to supplied code + magic string
 #ifdef	SAFE
 	LDAA 0, X			; first char
-	CMPA #'U'			; is it correct? TBD
+	CMPA #'U'			; is it correct?
 		BNE fsn_err			; not!
 	LDAA 1, X			; second char
 	CMPA #'N'			; correct?
@@ -230,12 +235,13 @@ fw_s_nmi:
 	CMPA #'*'			; correct?
 	BEQ fsn_valid		; yeah, proceed!
 fsn_err:
-		_DR_ERR(CORRUPT)		; ...or invalid NMI handler
+		_DR_ERR(CORRUPT)	; ...or invalid NMI handler
 fsn_valid:
 #endif
 ; transfer supplied pointer to firmware vector
-	STX fw_nmi				; store for firmware
-	_DR_OK					; done (8)
+	STX fw_nmi			; store for firmware
+	_DR_OK				; done
+
 
 ; SET_BRK, set SWI handler
 ;		INPUT
@@ -243,9 +249,10 @@ fsn_valid:
 ; no CS as STX is atomic!
 
 fw_s_brk:
-	LDX kerntab				; get pointer
-	STX fw_brk				; store for firmware
-	_DR_OK					; done
+	LDX kerntab			; get pointer
+	STX fw_brk			; store for firmware
+	_DR_OK				; done
+
 
 ; JIFFY, set jiffy IRQ frequency
 ;		INPUT
@@ -256,15 +263,16 @@ fw_s_brk:
 fw_jiffy:
 ; GENERIC!!!
 ; if could not change, then just set return parameter and C
-	LDX irq_hz		; get input values
-		BNE fj_set		; not just checking
+	LDX irq_hz			; get input values
+		BNE fj_set			; not just checking
 	LDX irq_freq		; get current frequency
-	STX irq_hz		; set return values
+	STX irq_hz			; set return values
 fj_end:
 	_DR_OK
 fj_set:
 	STX irq_freq		; store in sysvars
-	BRA fj_end		; all done, no need to update as will be OK
+	BRA fj_end			; all done, no need to update as will be OK
+
 
 ; IRQ_SOURCE, investigate source of interrupt
 ;		OUTPUT
@@ -282,24 +290,26 @@ fw_i_src:
 ; C -> not implemented
 
 fw_power:
-	TSTB				; is it zero?
+	TSTB				; is it zero? could be CMPB #PW_STAT
 	BNE fwp_ns			; not suspend
 ; this would be suspend code...
 fwp_exit:
 		_DR_OK				; just continue execution
 fwp_ns:
-	CMPB #2				; warm?
+	CMPB #PW_WARM		; warm?
 	BNE fwp_nw			; not
-		LDX fw_warm			; get restart vector
+		LDX fw_warm			; or get kernel start vector
 		JMP 0, X			; warm boot!
 fwp_nw:
-	CMPB #4				; cold?
+	CMPB #PW_COLD		; cold?
 	BNE fwp_nc			; not
-		JMP reset			; Go to internal reset!
+		JMP reset			; or go to internal reset!
 fwp_nc:
-	CMPB #6				; off?
-	BNE fwp_exit			; not recognised
-		_PANIC("{OFF}")		; just in case is handled
+	CMPB #PW_OFF		; off?
+	BNE fwp_exit		; not recognised
+; should add here shutdown code
+		_PANIC("{OFF}")		; placeholder if not implemented
+
 
 ; FREQ_GEN, frequency generator hardware interface, TBD
 fw_fgen:
@@ -310,6 +320,7 @@ fw_fgen:
 ; but a reduced, non patchable INSTALL is available instead
 #ifndef	LOWRAM
 
+
 ; INSTALL, copy jump table
 ;		INPUT
 ; kerntab	= address of supplied JUMP table
@@ -319,44 +330,46 @@ fw_install:
 	_ENTER_CS			; disable interrupts!
 	PSHA				; EEEEEEEEEEEK
 	CLRB				; reset counter (2)
-	LDX #fw_table			; get destination pointer (3) eeeeeeeek
+	LDX #fw_table		; get destination pointer (3) eeeeeeeek
 	STX systmp			; store temporarily (5)
 fwi_loop:
-		LDX kerntab		; set origin pointer (4)
-		LDAA 0, X		; get byte from table as supplied (5)
-		INX			; increment (4)
-		STX kerntab		; ...and update (5)
-		LDX systmp		; switch to destination (4)
-		STAA 0, X		; copy the byte (6)
-		INX			; increment (4)
-		STX systmp		; ...and update (5)
-		INCB			; advance counter (2)
+		LDX kerntab			; set origin pointer (4)
+		LDAA 0, X			; get byte from table as supplied (5)
+		INX					; increment (4)
+		STX kerntab			; ...and update (5)
+		LDX systmp			; switch to destination (4)
+		STAA 0, X			; copy the byte (6)
+		INX					; increment (4)
+		STX systmp			; ...and update (5)
+		INCB				; advance counter (2)
 		BNE fwi_loop		; until whole page is done (4)
-;	DEC kerntab+1		; restore original value (6)
+;	DEC kerntab			; restore original page, if needed (6)
 	LDX #fw_table		; the firmware table will be pointed... (3)
-	STX kern_ptr			; ...from the standard address (5)
+	STX kern_ptr		; ...from the standard address (5)
 	PULA				; EEEEEEEEEEEK
 	_EXIT_CS			; restore interrupts if needed
 	_DR_OK				; all done
+
 
 ; PATCH, patch single function
 ; kerntab <- address of code
 ; acc B <- function to be patched
 
 fw_patch:
-	_ENTER_CS				; disable interrupts, respects A
-	ADDB #<fw_table				; compute final LSB
-	STAB systmp+1				; set temporary pointer
-	LDAB #>fw_table				; now for MSB
-	ADCB #0					; propagate carry
-	STAB systmp				; pointer is ready
-	LDX systmp				; set as index
-	LDAB kerntab				; get function MSB
-	STAB 0, X				; store into firmware
-	LDAB kerntab+1				; and LSB
+	_ENTER_CS			; disable interrupts, respects A
+	ADDB #<fw_table		; compute final LSB
+	STAB systmp+1		; set temporary pointer
+	LDAB #>fw_table		; now for MSB
+	ADCB #0				; propagate carry
+	STAB systmp			; pointer is ready
+	LDX systmp			; set as index
+	LDAB kerntab		; get function MSB
+	STAB 0, X			; store into firmware
+	LDAB kerntab+1		; and LSB
 	STAB 1, X
-	_EXIT_CS				; restore interrupts
-	_DR_OK					; done
+	_EXIT_CS			; restore interrupts
+	_DR_OK				; done
+
 
 ; CONTEXT, zeropage & stack bankswitching
 ; *** TO BE DONE ****** TO BE DONE ***
@@ -368,9 +381,9 @@ fw_ctx:
 fw_install:
 ; *** limited version ***
 ; no CS as STX is atomic!
-	LDX kerntab		; the supplied table will be pointed...
-	STX kern_ptr			; ...from the standard address
-	_DR_OK					; done
+	LDX kerntab			; the supplied table will be pointed...
+	STX kern_ptr		; ...from the standard address
+	_DR_OK				; done
 
 fw_patch:
 fw_ctx:
@@ -381,13 +394,6 @@ fw_ctx:
 ; ****************************
 ; *** some firmware tables ***
 ; ****************************
-
-; power sub-function pointer table (eeeek)
-fwp_func:
-	.word	fwp_susp	; suspend	+FW_STAT
-	.word	kernel		; shouldn't use this, just in case
-	.word	fwp_cold	; coldboot	+FW_COLD
-	.word	fwp_off		; poweroff	+FW_OFF
 
 ; ****** some odds ******
 
@@ -411,23 +417,23 @@ fw_mname:
 * = admin_ptr
 
 ; generic functions, esp. interrupt related
-	JMP fw_gestalt	; GESTALT get system info (renumbered) @0
-	JMP fw_s_isr	; SET_ISR set IRQ vector +3
-	JMP fw_s_nmi	; SET_NMI set (magic preceded) NMI routine +6
-	JMP fw_s_brk	; *** SET_BRK set debugger, new 20170517 +9
-	JMP fw_jiffy	; *** JIFFY set jiffy IRQ speed, ** TBD ** +C
-	JMP fw_i_src	; *** IRQ_SOURCE get interrupt source for total ISR independence +F
+	JMP fw_gestalt		; GESTALT get system info (renumbered) @0
+	JMP fw_s_isr		; SET_ISR set IRQ vector +3
+	JMP fw_s_nmi		; SET_NMI set (magic preceded) NMI routine +6
+	JMP fw_s_brk		; SET_BRK set debugger, new 20170517 +9
+	JMP fw_jiffy		; JIFFY set jiffy IRQ speed, ** TBD ** +C
+	JMP fw_i_src		; *** IRQ_SOURCE get interrupt source for total ISR independence +F
 
 ; pretty hardware specific
-	JMP fw_power	; POWEROFF power-off, suspend or cold boot +12
-	JMP fw_fgen		; *** FREQ_GEN frequency generator hardware interface, TBD +15
+	JMP fw_power		; POWEROFF power-off, suspend or cold boot +12
+	JMP fw_fgen			; *** FREQ_GEN frequency generator hardware interface, TBD +15
 
 ; a reduced INSTALL is available for LOWRAM system, calling it is mandatory!
-	JMP fw_install	; INSTALL copy jump table +18
+	JMP fw_install		; INSTALL copy jump table +18
 #ifndef	LOWRAM
 ; not for LOWRAM systems
-	JMP fw_patch	; PATCH patch single function (renumbered) +1B
-	JMP fw_ctx		; *** CONTEXT context bankswitching +1E
+	JMP fw_patch		; PATCH patch single function (renumbered) +1B
+	JMP fw_ctx			; *** CONTEXT context bankswitching +1E
 #endif
 
 ; ****** at the NEW standard address $FFC0, this will be at $FFDE ******
@@ -445,7 +451,7 @@ fw_mname:
 * = lock
 	SEI					; locks at same address as 6502
 panic_loop:
-	BRA panic_loop	; always OK
+		BRA panic_loop		; always OK
 
 ; ****** use some space for interrupt handlers ******
 ; *** vectored IRQ handler *** $FFE3
