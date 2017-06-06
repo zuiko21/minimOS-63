@@ -1,12 +1,12 @@
 ; minimOS-63 firmware module
 ; 6800 code snippet in order to reject a 6809 CPU
 ; updated to tell Hitachi and other microcontrrollers!
-; v0.6b1
+; v0.6b2
 ; (C) 2017 Carlos J. Santisteban
-; last modified 20170604-1951
+; last modified 20170606-2228
 
 .(
-	LDA A #2		; 86 02
+	LDAA #2			; 86 02
 	TAP				; 06		; is ROR $30 on 6809...
 	TSX				; 30		; ...safer than NOP
 	BVS ok_6800		; 29 03		; ROR on 6809 lets V clear
@@ -14,19 +14,19 @@
 ok_6800:
 ; *** continue telling improvements over the original 6800, if desired ***
 	LSRD			; 04		; *** only microcontrollers will halve A ***
-	CMP A #2		; 81 02		; regular 6800?
+	CMPA #2			; 81 02		; regular 6800?
 		BEQ set_cpu		; 27 0D		; detected 6800/6802/6808 (A=2)
 ; microcontrollers have A halved at 1
 	LDX #0			; CE 00 00	; on Hitachi will become 1
 	XGDX			; 18		; *** A exchanged with X on Hitachi only... ***
 	INX			; 08		; ...but INY on 68HC11!!!
 ; X=0 on HC11, X=1 on 6801/6803, X=2 & A=0 on Hitachi, A=1 otherwise
-	TST A			; 4D		; zero only on Hitachi, already set
+	TSTA			; 4D		; zero only on Hitachi, already set
 		BEQ set_cpu		; 27 05		; Hitachi detected (A=0)
 	DEX			; 09		; becomes 0 on 6801/6803
 		BEQ set_cpu		; 26 02		; not HC, A stays at 1
-	LDA A #3		; 86 03		; otherwise is HC11
+	LDAA #3			; 86 03		; otherwise is HC11
 set_cpu:
 ; *** here A=0 for 6301/6303, A=1 for 6801/6803, A=2 for 6800/6802/6808, A=3 for 68HC11 ***
-
+	STAA fw_cpu		; B7 xx xx	; update firmware variable
 .)

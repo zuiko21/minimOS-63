@@ -1,8 +1,8 @@
 ; firmware for minimOS-63
 ; sort-of generic template
-; v0.6a4
+; v0.6a5
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170606-1009
+; last modified 20170606-2235
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -154,16 +154,13 @@ nmi_end:
 	PULA				; retrieve saved vars
 	PULB
 	STAB systmp+1		; restore values
-	STAA systmp+1
+	STAA systmp
 	RTI					; resume normal execution, hopefully
 
 ; *** execute standard NMI handler, if magic string failed ***
 rst_nmi:
-	LDAB #<nmi_end		; prepare return address
-	LDAA #>nmi_end		; also MSB
-	PSHB				; push in standard order
-	PSHA
-; ...will continue thru subsequent standard handler, its RTS will get back to ISR exit
+	BSR std_nmi		; call standard routine
+	BRA nmi_end		; and finish, much simpler
 
 ; *** default code for NMI handler, if not installed or invalid, should end in RTS ***
 std_nmi:
@@ -460,7 +457,7 @@ irq:
 	LDX fw_isr			; vectored ISR
 	JMP 0, X			; MUST end in RTI
 
-; *** minimOS BRK handler *** %FFE8
+; *** minimOS SWI handler *** $FFE8
 ; might go elsewhere
 brk_hndl:		; label from vector list
 	LDX fw_brk			; get vectored pointer

@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel
-; v0.6a3
+; v0.6a4
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170606-1240
+; last modified 20170606-2241
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -478,12 +478,14 @@ ks_cr:
 ; *********************************
 ; *** interrupt service routine ***
 ; *********************************
-; will include BRK handler!
 
 k_isr:
 #include "isr/irq.s"
 ; default NMI-ISR is on firmware!
 
+; *** 6800 will handle a separate SWI handler ***
+k_swi:
+#include "isr/swi.s"
 
 ; in headerless builds, keep at least the splash string
 #ifdef	NOHEAD
