@@ -1,8 +1,10 @@
 ; minimOS·63 0.6a3 MACRO definitions
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170605-1944
+; last modified 20170607-0910
 
+; **************************
 ; *** standard addresses ***
+; **************************
 
 kern_ptr	=	$FC		; pointer to jump table, routines ending in RTS
 admin_ptr	=	$FFC0	; NEW fixed jump table, routines ending in RTS, intended for kernel/drivers ONLY
@@ -10,16 +12,15 @@ admin_ptr	=	$FFC0	; NEW fixed jump table, routines ending in RTS, intended for k
 ; unified address (will lock at $FFE1-2 anyway)
 lock		=	$FFE0	; just after the above
 
-; *** device numbers for optional pseudo-driver modules, TBD ***
-;TASK_DEV	=	128		; no longer needed, may displace the following
-WIND_DEV	=	129		; new name 20161017, might suffer the same fate!
-FILE_DEV	=	130		; *** this will be sticked somewhere as no patchable API entries for it! Perhaps #128
-
+; *****************************
 ; *** common function calls ***
+; *****************************
 
 ; system calling interface ***
-#define		_KERNEL(a)		LDX kern_tab: JSR a, X
+#define		_KERNEL(a)		LDX kern_ptr: JSR a, X
 #define		_ADMIN(a)		LDX #admin_ptr: JSR a, X
+; Kernel/firmware function numbers are multiples of 3!!! Each entry is JMP ext
+; besides zpar* parameters, accumulator B is used (like Y on 6502)
 
 ; *** function endings ***
 ; if Carry is set, acc B holds error code
@@ -37,20 +38,31 @@ FILE_DEV	=	130		; *** this will be sticked somewhere as no patchable API entries
 #define		_DR_OK		CLC: RTS
 #define		_DR_ERR(a)	LDAB #a: SEC: RTS
 
+; *** special functions ***
 ; new exit for asynchronous driver routines when not satisfied
 #define		_NEXT_ISR	SEC: RTS
 #define		_ISR_DONE	CLC: RTS
 
 ; new macros for critical sections, do not just rely on SEI/CLI
-; accumulator A must be kept! Otherwise add PSHA after entering and PULA before exit!
+; * accumulator A must be kept! Otherwise add PSHA after entering and PULA before exit! *
 #define		_ENTER_CS	TPA: SEI
 #define		_EXIT_CS	TAP
 
-
-; ** panic call, now using BRK in case of error display ** new BRK handled 20161010
+; *** panic call, now using SWI in case of error display *** new SWI handled 20161010
 #define		_PANIC(a)	SWI: .asc a, 0
 
+; **************************************************************
+; *** device numbers for optional pseudo-driver modules, TBD ***
+; **************************************************************
+
+;TASK_DEV	=	128		; no longer needed, may displace the following
+WIND_DEV	=	129		; new name 20161017, might suffer the same fate!
+FILE_DEV	=	130		; *** this will be sticked somewhere as no patchable API entries for it! Perhaps #128
+
+; *****************************
 ; *** usual ASCII constants ***
+; *****************************
+
 #define		CR		13
 #define		LF		10
 #define		BS		8

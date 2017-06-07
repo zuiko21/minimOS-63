@@ -1,7 +1,7 @@
 ; minimOS·63 0.6a1 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170601-1224
+; last modified 20170607-0907
 
 ; *************************************************
 ; *************************************************
@@ -82,8 +82,10 @@ IRQ_SOURCE	= 15	; get interrupt source in X for total ISR independence
 POWEROFF	= 18	; power-off, suspend or cold boot
 FREQ_GEN	= 21	; frequency generator hardware interface, TBD
 
-; not for LOWRAM systems
+; reduced version for LOWRAM systems, otherwise standard and mandatory use
 INSTALL		= 24	; copy jump table
+
+; not for LOWRAM systems
 PATCH		= 27	; patch single function (renumbered)
 CONTEXT		= 30	; context bankswitching
 
