@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel
-; v0.6a4
+; v0.6a5
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170606-2241
+; last modified 20170607-1725
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -102,36 +102,36 @@ ram_init:
 ; *** 1) initialise stuff ***
 ; clear some bytes
 	CLRB				; reset driver index (2)
-	CLR queues_mx		; reset all indexes (6+6)
-	CLR queues_mx+1
+	STAB queues_mx		; reset all indexes, faster than CLR (5+5)
+	STAB queues_mx+1
 
 #ifdef LOWRAM
 ; ------ low-RAM systems have no direct tables to reset ------
 ; ** maybe look for fast tables in ROM **
-	CLR drv_num			; single index of, not necessarily SUCCESSFULLY, detected drivers, updated 20150318 (4)
+	STAB drv_num			; single index of, not necessarily SUCCESSFULLY, detected drivers, updated 20150318 (5)
 ; ------
 #else
 ; ++++++ new direct I/O tables for much faster access 20160406 ++++++
-	CLR run_pid			; new 170222, set default running PID *** this must be done BEFORE initing drivers as multitasking should place appropriate temporary value via SET_CURR!
-	LDAA #>dr_error		; make unused entries point to a standard error routine
-	LDAB #<dr_error		; the LSB too
+	STAB run_pid			; new 170222, set default running PID *** this must be done BEFORE initing drivers as multitasking should place appropriate temporary value via SET_CURR! (5)
+	LDAA #>dr_error		; make unused entries point to a standard error routine (2)
+	LDAB #<dr_error		; the LSB too (2)
 ; *** reset all tables ***
-	LDX #drv_opt		; output routines handler
+	LDX #drv_opt		; output routines handler (3)
 dr_oclear:
-		BSR dr_clrio		; shared code!
-		CPX #drv_opt+256	; all done?
+		BSR dr_clrio		; shared code! (8+25)
+		CPX #drv_opt+256	; all done? (3+4)
 		BNE dr_oclear
-	LDX #drv_ipt		; input routines handler
+	LDX #drv_ipt		; input routines handler (3)
 dr_iclear:
-		BSR dr_clrio		; shared code!
-		CPX #drv_ipt+256	; all done?
+		BSR dr_clrio		; shared code! (8+25)
+		CPX #drv_ipt+256	; all done? (3+4)
 		BNE dr_iclear
-	LDX #cio_lock		; will clear I/O locks and binary flags!
-	CLRA				; zero is to be stored, both arrays interleaved!
+	LDX #cio_lock		; will clear I/O locks and binary flags! (3)
+	CLRA				; zero is to be stored, both arrays interleaved! (2+2)
 	CLRB
 dr_lclear:
-		BSR dr_clrio		; shared code!
-		CPX #cio_lock+256	; all done?
+		BSR dr_clrio		; shared code! (8+25)
+		CPX #cio_lock+256	; all done? (3+4)
 		BNE dr_lclear
 ; ++++++
 #endif
@@ -140,103 +140,102 @@ dr_lclear:
 ; first get the pointer to each driver table
 drv_aix = systmp		; temporary pointer, *** might go into locals ***
 
-	LDX #drivers_ad		; driver table in ROM
+	LDX #drivers_ad		; driver table in ROM (3)
 dr_loop:
-		STX drv_aix			; reset index (may change in future as X)
-		LDX 0, X			; get current pointer
-		BNE dr_inst			; cannot be zero, in case is too far for BEQ dr_ok
-			JMP dr_ok			; all done otherwise
+		STX drv_aix			; reset index (5)
+		LDX 0, X			; get current pointer (6)
+		BNE dr_inst			; cannot be zero, in case is too far for BEQ dr_ok (4)
+			JMP dr_ok			; all done otherwise (3)
 
 ; *********************************************************
-; *** subroutine for putting A as MSB and B as LSB, X+2 ***
+; *** subroutine for putting A as MSB and B as LSB, X+2 *** (25)
 dr_clrio:
-	STAA 0, X			; set MSB for output
-	STAB 1, X			; and LSB
-	INX					; next word
+	STAA 0, X			; set MSB for output (6)
+	STAB 1, X			; and LSB (6)
+	INX					; next word (4+4+5)
 	INX
 	RTS
 ; *** perhaps in another place, try to use BSR ***
 ; ************************************************
 
 dr_inst:
-		STX da_ptr			; store pointer to header, *** but check new variable conflicts! ***
+		STX da_ptr			; store pointer to header (5) *** but check new variable conflicts! ***
 ; create entry on IDs table
 		LDAA D_ID, X		; get ID code (5)
-		STAA dr_id			; keep in local variable as will be often used
+		STAA dr_id			; keep in local variable as will be often used (4)
 #ifdef	SAFE
-		BMI dr_phys			; only physical devices (3/2)
+		BMI dr_phys			; only physical devices (4)
 			JMP dr_abort		; reject logical devices (3)
 dr_phys:
 #endif
-		LDAA D_AUTH, X		; get provided features
-		STAA dr_feat		; another commonly used value (will stay during check)
+		LDAA D_AUTH, X		; get provided features (5)
+		STAA dr_feat		; another commonly used value (will stay during check) (4)
 
 ; *** 3) before registering, check whether the driver COULD be successfully installed ***
 ; that means 1) there must be room enough on the interrupt queues for its tasks, if provided
 ; and 2) the D_INIT routine succeeded as usual
 ; otherwise, skip the installing procedure altogether for that driver
-		ASLA				; extract MSb (will be A_POLL first) *** no longer using dr_aut
-		BCC dr_nptsk		; skip verification if task not enabled
-			LDAB queues_mx+1	; get current tasks in P queue
-			CMPB #MAX_QUEUE		; room for another?
-			BCC dr_ntsk			; yeah! will this work on 6800 too??
+		ASLA				; extract MSb (will be A_POLL first) (2)
+		BCC dr_nptsk		; skip verification if task not enabled (4)
+			LDAB queues_mx+1	; get current tasks in P queue (4)
+			CMPB #MAX_QUEUE		; room for another? (2)
+			BCC dr_ntsk			; yeah! will this work on 6800 too?? (4)
 dr_nabort:
-				JMP dr_abort		; or did not checked OK
+				JMP dr_abort		; or did not checked OK (3)
 dr_nptsk:
-		ASL					; extract MSb (now is A_REQ) *** no longer using dr_aut
-		BCC dr_nrtsk		; skip verification if task not enabled
-			LDAB queues_mx	; get current tasks in R queue
-			CMPB #MAX_QUEUE		; room for another?
-				BCS dr_nabort			; did not check OK
+		ASLA				; extract MSb (now is A_REQ) (2)
+		BCC dr_nrtsk		; skip verification if task not enabled (4)
+			LDAB queues_mx	; get current tasks in R queue (4)
+			CMPB #MAX_QUEUE		; room for another? (2)
+				BCS dr_nabort			; did not check OK (4)
 dr_nrtsk:
 ; if arrived here, there is room for interrupt tasks, but check init code
-;		STAA dr_aut			; *** will save it here for later...
-		JSR D_INIT, X		; like dr_icall, call D_INIT routine!
-			BCS dr_nabort		; no way, forget about this
+;		STAA dr_aut			; *** will save it here for later... (4)
+		JSR D_INIT, X		; like dr_icall, call D_INIT routine! (8...)
+			BCS dr_nabort		; no way, forget about this (4)
 ; *** 4) driver should be OK to install, just check whether this ID was not in use ***
 
 #ifndef	LOWRAM
 ; ++++++ new faster driver list ++++++
-		BSR dr_outptr		; get pointer to output routine
-		CPX #dr_error		; check whether something was installed
-			BNE dr_busy			; pointer was not empty
-		BSR dr_inptr		; get pointer to input routine
-		CPX #dr_error		; check whether something was installed
-		BEQ dr_empty		; it is OK to set
-dr_busy:
-			JMP dr_abort		; already in use
+		BSR dr_outptr		; get pointer to output routine (8+28)
+		CPX #dr_error		; check whether something was installed (3)
+			BNE dr_nabort			; pointer was not empty (4)
+		BSR dr_inptr		; get pointer to input routine (8+34)
+		CPX #dr_error		; check whether something was installed (3)
+			BEQ dr_nabort		; already in use (4)
+		BRA dr_empty		; was empty, OK (4)
 
 ; ********************************************
 ; *** subroutine for copy dr_iopt into (X) ***
 ; uses acc B and restores X as da_ptr
 dr_setpt:
-	LDAB dr_iopt		; get MSB
-	STAB 0, X			; write it!
-	LDAB dr_iopt+1		; LSB too
+	LDAB dr_iopt		; get MSB (3)
+	STAB 0, X			; write it! (6)
+	LDAB dr_iopt+1		; LSB too (3+6)
 	STAB 1, X
-	LDX da_ptr			; restore header pointer
+	LDX da_ptr			; restore header pointer (4+5)
 	RTS
 
 ; *** locate entry for input according to ID ***
 dr_inptr:
-	LDAB dr_id			; take original ID... or preset parameter!
-	ASLB				; times two, as is index to pointers
-	ADDB #<drv_ipt		; add to LSB
-	STAB systmp+1		; *** is this already used??? ***
-	LDAB #>drv_ipt		; now for MSB
-	BRA dr_iopx			; common ending!
+	LDAB dr_id			; take original ID... or preset parameter! (3)
+	ASLB				; times two, as is index to pointers (2)
+	ADDB #<drv_ipt		; add to LSB (2)
+	STAB systmp+1		; *** is this already used??? *** (4)
+	LDAB #>drv_ipt		; now for MSB (2)
+	BRA dr_iopx			; common ending! (4+17)
 
 ; *** locate entry for output according to ID ***
 dr_outptr:
-	LDAB dr_id			; take original ID... or preset parameter!
-	ASLB				; times two, as is index to pointers
-	ADDB #<drv_opt		; add to LSB
-	STAB systmp+1		; *** is this already used??? ***
-	LDAB #>drv_opt		; now for MSB
+	LDAB dr_id			; take original ID... or preset parameter! (3)
+	ASLB				; times two, as is index to pointers (2)
+	ADDB #<drv_opt		; add to LSB (2)
+	STAB systmp+1		; *** is this already used??? *** (4)
+	LDAB #>drv_opt		; now for MSB (2)
 dr_iopx:
-	ADCB #0				; propagate carry
+	ADCB #0				; propagate carry (2+4)
 	STAB systmp
-	LDX systmp			; get final pointer
+	LDX systmp			; get final pointer (4+5)
 	RTS
 ; *** end of subroutines ***
 ; **************************
@@ -246,56 +245,56 @@ dr_empty:
 
 ; *** 4b) Set I/O pointers (if memory allows) ***
 ; might check here whether I/O are provided!
-;		LDAA dr_aut			; *** continue with bit shifting!
-;		ASLA				; look for CIN
-;		BCC dr_seto			; no input for this!
-			LDX D_CIN, X		; get input routine address, this X=6502 sysptr
-			STX dr_iopt			; *** new temporary, will hold address to write into entry
-			BSR dr_inptr		; locate entry for input according to ID! X points to entry
-			BSR dr_setpt		; using B, copy dr_iopt into (X)
+;		LDAA dr_aut			; *** continue with bit shifting! (3)
+;		ASLA				; look for CIN (2)
+;		BCC dr_seto			; no input for this! (4)
+			LDX D_CIN, X		; get input routine address, this X=6502 sysptr (6)
+			STX dr_iopt			; *** new temporary, will hold address to write into entry (5)
+			BSR dr_inptr		; locate entry for input according to ID! X points to entry (8+34)
+			BSR dr_setpt		; using B, copy dr_iopt into (X) (8+29)
 dr_seto:
 ;		ASL dr_aut			; look for COUT (5)
-;		BCC dr_nout			; no output for this!
-			LDX D_COUT, X		; get output routine address, this X=6502 sysptr
-			STX dr_iopt			; *** new temporary, will hold address to write into entry
-			BSR dr_outptr		; locate entry for output according to ID! X points to entry
-			BSR dr_setpt		; using B, copy dr_iopt into (X)
+;		BCC dr_nout			; no output for this! (4)
+			LDX D_COUT, X		; get output routine address, this X=6502 sysptr (6)
+			STX dr_iopt			; *** new temporary, will hold address to write into entry (5)
+			BSR dr_outptr		; locate entry for output according to ID! X points to entry (8+28)
+			BSR dr_setpt		; using B, copy dr_iopt into (X) (8+29)
 dr_nout:
 ; ++++++
 #else
 ; ------ IDs table filling for low-RAM systems ------
 ; check whether the ID is already in use
-		LDX #drivers_id		; beginning of ID list
-		LDAA dr_id			; fetch aspiring ID
-		LDAB drv_num		; number of drivers registered this far
-		BEQ dr_eol			; already at end of list
+		LDX #drivers_id		; beginning of ID list (3)
+		LDAA dr_id			; fetch aspiring ID (3)
+		LDAB drv_num		; number of drivers registered this far (3)
+		BEQ dr_eol			; already at end of list (4)
 dr_scan:
 #ifdef	SAFE
-			CMPA 0, X			; compare with list entry
-				BEQ dr_abort		; already in use, don't register
+			CMPA 0, X			; compare with list entry (5)
+				BEQ dr_abort		; already in use, don't register (4)
 #endif
-			INX					; otherwise try next one
-			DECB				; one less to go
+			INX					; otherwise try next one (4)
+			DECB				; one less to go (2+4)
 			BNE dr_scan
 dr_eol:
 ; supposedly no conflicting IDs found, or at least pointer set after last one
-		STAA 0, X			; store in list, now in RAM
+		STAA 0, X			; store in list, now in RAM (6)
 ; ------
 #endif
 
 ; *** 5) register interrupt routines *** new, much cleaner approach ***** REVISE
-		LDAA dr_feat		; get original auth code
-		STAA dr_aut			; and keep for later!
+		LDAA dr_feat		; get original auth code (3)
+		STAA dr_aut			; and keep for later! (4)
 ; time to get a pointer to the-block-of-pointers (source)
-		LDX da_ptr			; work with current header
-		LDX D_POLL, X		; get this pointer
-		STX sysptr			; store it ***** check!
+		LDX da_ptr			; work with current header (4)
+		LDX D_POLL, X		; get this pointer (6)
+		STX sysptr			; store it ***** check! (5)
 ; also a temporary pointer to the particular queue
-		LDX #drv_poll		; must be the first one?
-		STX dq_ptr			; store temporarily
+		LDX #drv_poll		; must be the first one? (3)
+		STX dq_ptr			; store temporarily (5)
 ; new functionality 170519, pointer to (interleaved) task enabling queues
-		LDX #drv_p_en		; this is the second one, will be decremented for async?
-		STX dte_ptr			; yet another temporary pointer...
+		LDX #drv_p_en		; this is the second one, will be decremented for async? (3)
+		STX dte_ptr			; yet another temporary pointer... (5)
 ; all set now, now easier to use a loop, not sure on 6800
 
 		LDAB #1				; index for loop (2)

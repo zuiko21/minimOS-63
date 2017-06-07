@@ -1,7 +1,7 @@
-; minimOS·63 0.6a1 API/ABI
+; minimOS·63 0.6a2 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170607-0907
+; last modified 20170607-1644
 
 ; *************************************************
 ; *************************************************
@@ -12,7 +12,7 @@
 ; basic I/O
 COUT		=   0	; character output
 CIN			=   3	; character input
-STRING		=   6	; output a C-string via COUT
+STRING		=   6	; output a C-string
 READLN		=   9	; read input into supplied buffer
 
 ; basic windowing system
@@ -21,12 +21,12 @@ CLOSE_W		=  15	; close a window or release device and its buffer
 FREE_W		=  18	; release a window but let it on screen, keeping its buffer, may be closed by kernel
 
 ; other generic functions
-UPTIME		=  21	; give uptime in ticks and seconds *** no longer_hid_push!
+UPTIME		=  21	; give uptime in ticks and seconds
 SET_FG		=  24	; set PB7 frequency generator ***firmware implementation
-SHUTDOWN	=  27	; proper shutdown, with or without power-off
+SHUTDOWN	=  27	; proper shutdown, with or without power-off ***might be used for NMI/SWI invocation
 LOAD_LINK	=  30	; get an executable from its path, and get it loaded into primary memory, maybe relocated
 
-; for multitask main use, but also with reduced single task management
+; mainly for multitasking use, but also for simplified single task management
 B_FORK		=  33	; reserve a free braid
 B_EXEC		=  36	; get code at some address running into a previously reserved braid
 B_SIGNAL	=  39	; send UNIX_like signal to a braid
