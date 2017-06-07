@@ -71,7 +71,6 @@ locals:						; old label for compatibility
 dr_aut: ma_ix: mm_sig: iol_dev:
 local1: locpt1	.dsb	4	; variables for kernel functions @ $E4
 
-
 dq_off	= dr_aut+1
 dq_ptr	= dr_aut+2
 

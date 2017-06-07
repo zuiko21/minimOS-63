@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel API for LOWRAM systems
-; v0.6a3
+; v0.6a4
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170606-0858
+; last modified 20170607-1015
 
 ; *** dummy function, non implemented ***
 unimplemented:		; placeholder here, not currently used
@@ -23,7 +23,7 @@ set_curr:
 aqmanage:
 pqmanage:
 
-	_ERR(UNAVAIL)	; go away!
+	_ERR(UNAVAIL)		; go away!
 
 ; ********************************
 ; *** COUT, output a character ***
@@ -35,46 +35,61 @@ pqmanage:
 ; C = I/O error
 ;		USES da_ptr, iol_dev, plus whatever the driver takes
 
-cio_of = da_ptr			; parameter switching between CIN and COUT
-; da_ptr globally defined, cio_of not needed upon calling dr_call!
+cio_of = dr_id			; parameter switching between CIN and COUT, must leave da_ptr clear!
 
 cout:
-	LDAA #D_COUT		; only difference from cin (2)
-	STAA cio_of			; store for further indexing (3)
+	CLR cio_of			; zero indicates COUT (6)
+; ** for MCUs, storing D_COUT would be great **
+;	LDAA #D_COUT		; offset to be added (2)
+;	STAA cio_of			; store safely (4)
 	TSTB				; for indexed comparisons (2)
-	BNE co_port			; not default (3/2)
+	BNE co_port			; not default (4)
 		LDAB stdout			; default output device (3)
-	BNE co_port			; eeeeeeeeeek
-		LDAB #DEVICE		; *** somewhat ugly hack ***
+	BNE co_port			; eeeeeeeeeek (4)
+		LDAB #DEVICE		; *** somewhat ugly hack *** (2)
 co_port:
-	BMI cio_phys		; not a logic device (3/2)
+	BMI cio_phys		; not a logic device (4)
 ; no need to check for windows or filesystem
 ; investigate rest of logical devices
-		CMPB #DEV_NULL		; lastly, ignore output
-			BNE cio_nfound		; final error otherwise
-		_EXIT_OK			; "/dev/null" is always OK
+		CMPB #DEV_NULL		; lastly, ignore output (2)
+			BNE cio_nfound		; final error otherwise (4)
+		_EXIT_OK			; "/dev/null" is always OK (7)
 cio_phys:
-;6502******************************************************************
-	LDX drv_num			; number of drivers (3)
-		BEQ cio_nfound		; no drivers at all! (2/3)
+	LDX #drivers_id		; pointer to ID list (3)
+	LDAA drv_num		; number of drivers (4*)
+		BEQ cio_nfound		; no drivers at all! (4)
 cio_loop:
-		CMP drivers_id-1, X	; get ID from list, notice trick (4)
-			BEQ cio_dev			; device found! (2/3)
-		DEX					; go back one (2)
-		BNE cio_loop		; repeat until end, will reach not_found otherwise (3/2)
+		CMPB 0, X			; get ID from list (5)
+			BEQ cio_dev			; device found! (4)
+		INX					; go for next (4)
+		DECA				; one less to go (2)
+		BNE cio_loop		; repeat until end, will reach not_found otherwise (4)
 cio_nfound:
-	_ERR(N_FOUND)		; unknown device, needed before cio_dev in case of optimized loop
+	_ERR(N_FOUND)		; unknown device (9)
 cio_dev:
-	DEX					; needed because of backwards optimized loop (2)
-	TXA					; get index in list (2)
-	ASL					; two times (2)
-	TAX					; index for address table!
-	LDY cio_of			; get offset (3)
-	LDA drivers_ad, X	; take table LSB (4)
-	STA da_ptr			; store pointer (3)
-	LDA drivers_ad+1, X	; same for LSB (4+3)
-	STA da_ptr+1		; cannot use neater way but no longer needs cio_of!
-	JMP dr_call			; re-use routine (3...)
+	NEGA				; driver countdown will be subtracted! (2)
+	ADDA drv_num		; compute driver position in list (4*)
+	ASLA				; two times is offset LSB for drivers_ad list (2)
+	ADDA #<drivers_ad	; take table LSB (2)
+	LDAB #>drivers_ad	; same for MSB (2)
+	ADCB #0				; propagate carry (2)
+	STAB da_ptr			; store pointer to list entry (4+4)
+	STAA da_ptr+1
+	LDX da_ptr			; use as base index (4)
+	LDX 0, X			; now X holds the header address (6)
+; ** here must jump to appropriate driver routine, generic way follows ** 11+2b, 16+4t
+	TST cio_of			; input or output? (6)
+	BNE cio_out			; was output (4)
+		LDX D_CIN, X		; otherwise get input routine pointer (6)
+		JMP 0, X			; not worth reusing code (4...)
+cio_out:
+	LDX D_COUT, X		; faster getting output routine pointer (6)
+cio_jmp:
+;  ** otherwise, MCUs might do ** 5+2b, 12+4t
+;	LDAB cio_of			; get offset, must hold an appropriate D_x offset (3)
+;	ABX					; GREAT, pointer to routine is ready (3)
+;	LDX 0, X			; ready to jump there (6)
+	JMP 0, X			; will return to caller (4...)
 
 ; *****************************
 ; *** CIN,  get a character ***
@@ -88,8 +103,8 @@ cio_dev:
 ; cin_mode is a kernel variable
 
 cin:
-	LDAA #D_CIN			; only difference from cout
-	STAA cio_of			; store for further addition
+	LDAA #D_CIN			; only difference from cout, as long as is not zero!
+	STAA cio_of			; store for further addition/selection
 	TSTB				; for indexed comparisons
 	BNE ci_port			; specified
 		LDAB std_in			; default input device
