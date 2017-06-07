@@ -248,31 +248,31 @@ ex_st:
 	LDS #SPTR			; init stack (3)
 ; set default SIGTERM handler! eeeeeeeeeeeeeeeeeeeeek
 	LDX #sig_kill		; default TERM (3)
-	STX mm_sterm		; set variable (
+	STX mm_sterm		; set variable (5)
 ; this is how a task should replace the shell
-	LDAA #ZP_AVAIL		; eeeeeeeeeeek
-	STAA z_used			; otherwise SAFE will not work
+	LDAA #ZP_AVAIL		; eeeeeeeeeeek (2)
+	STAA z_used			; otherwise SAFE will not work (4)
 ; and set default devices!!! eeeeeeeeeeeeeeeeeeeeeeek
 ; in case of LOWRAM, this will alter default global devices, is that OK?
-	LDX def_io			; standard input/output
-	STX std_in			; set at GLOBAL
+	LDX def_io			; standard input/output (4)
+	STX std_in			; set as GLOBAL (5)
 ; *** soon will preset registers according to new API ***
 ; at last, launch code
-	LDX ex_pt			; where to jump
-	CLI					; time to do it!
-	JSR 0, X			; call and return to SIGKILL
+	LDX ex_pt			; where to jump (4)
+	CLI					; time to do it! (2)
+	JSR 0, X			; call and return to SIGKILL (4...)
 
 ; *** SIGKILL standard handler ***
 sig_kill:
 ; systems without memory management have nothing to free...
-	TST sd_flag			; some pending action?
-	BEQ rst_shell		; if not, just restart the shell
-		LDAB #PW_CLEAN		; or go into second phase...
-		JSR shutdown		; ...of shutdown procedure (could use JMP)
+	TST sd_flag			; some pending action? (6)
+	BEQ rst_shell		; if not, just restart the shell (4)
+		LDAB #PW_CLEAN		; or go into second phase... (2)
+		JSR shutdown		; ...of shutdown procedure (could use JMP) (9)
 ; if none of the above, a single task system can only restart the shell!
 rst_shell:
-	LDS #SPTR			; init stack again (in case SIGKILL was called)
-	JMP sh_exec			; back to kernel shell!
+	LDS #SPTR			; init stack again (in case SIGKILL was called) (3)
+	JMP sh_exec			; back to kernel shell! (3)
 
 
 ; **************************************************
@@ -284,20 +284,21 @@ rst_shell:
 
 signal:
 #ifdef	SAFE
-	TSTB				; check correct PID, really needed?
-		BNE sig_pid			; strange error?
+	TSTB				; check correct PID, really needed? (2)
+		BNE sig_pid			; strange error? (4)
 #endif
-	LDAA b_sig			; get the signal
-	CMPA #SIGTERM		; clean shutdown?
-	BNE sig_suic
+	LDAA b_sig			; get the signal (3)
+	CMPA #SIGTERM		; clean shutdown? (2)
+	BNE sig_suic		; no, check for KILL then (4)
 ; 6800 SIGTERM handlers end in RTS, thus a pretty standard jump is OK
-		LDX mm_sterm		; pointer to handler
-		JMP 0, X			; will return to caller
+; please note that it should clear C in case of no problems! 
+		LDX mm_sterm		; pointer to handler (4)
+		JMP 0, X			; will return to caller (4)
 sig_suic:
-	CMPA #SIGKILL		; suicide?
-		BEQ sig_kill
+	CMPA #SIGKILL		; suicide? (2)
+		BEQ sig_kill		; it was, thus terminate as usual (4)
 sig_pid:
-	_ERR(INVALID)		; unrecognised signal
+	_ERR(INVALID)		; unrecognised signal (9)
 
 
 ; ************************************************
@@ -311,13 +312,13 @@ sig_pid:
 
 status:
 #ifdef	SAFE
-	TSTB				; check PID
-		BNE sig_pid			; only 0 accepted
+	TSTB				; check PID (2)
+		BNE sig_pid			; only 0 accepted (4)
 #endif
-	LDAB #BR_RUN		; single-task systems are always running
+	LDAB #BR_RUN		; single-task systems are always running (2)
 ; might include some architecture information...
 sig_exit:
-	_EXIT_OK
+	_EXIT_OK			; done so far (7)
 
 
 ; **************************************************************
@@ -331,12 +332,12 @@ sig_exit:
 
 set_handler:
 #ifdef	SAFE
-	TSTB				; check PID
-		BNE sig_pid			; only 0 accepted
+	TSTB				; check PID (2)
+		BNE sig_pid			; only 0 accepted (4)
 #endif
-	LDX ex_pt			; get pointer
-	STX mm_sterm		; store in single variable (from unused table)
-	_EXIT_OK
+	LDX ex_pt			; get pointer (4)
+	STX mm_sterm		; store in single variable (5)
+	_EXIT_OK			; done (7)
 
 
 ; ***************************************************************
