@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel API for LOWRAM systems
 ; v0.6a4
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170607-1112
+; last modified 20170607-1317
 
 ; *** dummy function, non implemented ***
 unimplemented:		; placeholder here, not currently used
@@ -485,57 +485,64 @@ str_abort:
 ; acc B		= dev
 ; str_pt	= buffer address
 ; ln_siz	= max offset (byte)
-;		USES rl_dev, rl_cur and whatever CIN takes
+;		USES rl_dev, rl_cur, loc_str and whatever CIN takes
 
 readLN:
-;6502******************************************************************
-	STY rl_dev			; preset device ID!
-	_STZY rl_cur		; reset variable
+	STAB rl_dev			; preset device ID! (4)
+	LDX str_pt			; destination buffer... (4)
+	STX loc_str			; ...set local copy (5)
+	CLR rl_cur			; reset cursor (6)
 rl_l:
-		JSR yield			; always useful!
-		LDY rl_dev			; use device
-		JSR cin				; get one character
-		BCC rl_rcv			; got something
-			CPY #EMPTY			; otherwise is just waiting?
-		BEQ rl_l			; continue then
-			LDA #0
-			_STAX(str_pt)		; if any other error, terminate string
-			RTS					; and return whatever error
+; no-one to yield to!
+		LDAB rl_dev			; use device (3)
+		JSR cin				; get one character (...)
+		BCC rl_rcv			; got something (4)
+			CMPB #EMPTY			; otherwise is just waiting? (2)
+		BEQ rl_l			; continue then (4)
+			LDX str_pt			; back to beginning (4)
+			CLR 0, X			; terminate string (7)
+			SEC					; MUST set carry again! (2)
+			RTS					; and return whatever error (5)
 rl_rcv:
-		LDA io_c			; get received
-		LDY rl_cur			; retrieve index
-		CMP #CR				; hit CR?
-			BEQ rl_cr			; all done then
-		CMP #BS				; is it backspace?
-		BNE rl_nbs			; delete then
-			TYA					; check index
-				BEQ rl_l			; ignore if already zero
-			DEC rl_cur			; otherwise reduce index
-			_BRA rl_echo		; and resume operation
+		LDAA io_c			; get received char (3)
+		LDAB rl_cur			; retrieve cursor (3)
+		LDX loc_str			; retrieve index (4)
+		CMPA #CR			; hit CR? (2)
+			BEQ rl_cr			; all done then (4)
+		CMPA #BS			; is it backspace? (2)
+		BNE rl_nbs			; delete then (4)
+			TSTB				; something to delete? (2)
+				BEQ rl_l			; ignore if already zero (4)
+			DEX					; otherwise reduce indexes (4+6)
+			DEC rl_cur
+			BRA rl_echo			; and resume operation (4)
 rl_nbs:
-		CPY ln_siz			; overflow? EEEEEEEEEEK
-			BCS rl_l			; ignore if so
-		STA (str_pt), Y		; store into buffer
-		INC	rl_cur			; update index
+		CMPB ln_siz			; overflow? EEEEEEEEEEK (3)
+			BCS rl_l			; ignore if so (4)
+		STAA 0, X			; store into buffer (6)
+		INC	rl_cur			; update indexes (6+4)
+		INX
 rl_echo:
-		LDY rl_dev			; retrieve device
-		JSR cout			; echo received character
-		_BRA rl_l			; and continue
+		STX loc_str			; update pointer (5)
+		LDAB rl_dev			; retrieve device (3)
+		JSR cout			; echo received character (...)
+		BRA rl_l			; and continue (4)
 rl_cr:
-	LDA #CR				; newline
-	LDY rl_dev			; retrieve device
-	JSR cout			; print newline (ignoring errors)
-	LDY rl_cur			; retrieve cursor!!!!!
-	LDA #0				; no STZ indirect indexed
-	STA (str_pt), Y		; terminate string
-	_EXIT_OK			; and all done!
+	LDAA #CR			; newline (2)
+	STAA io_c			; EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEK (4)
+	LDAB rl_dev			; retrieve device (3)
+	JSR cout			; print newline ignoring errors (...)
+	LDX loc_str			; retrieve cursor!!!!! (4)
+	CLR 0, X			; terminate string (7)
+	_EXIT_OK			; and all done! (7)
+
 
 
 ; **************************************************
 ; *** SET_FG, enable/disable frequency generator *** TO BE REVISED
 ; **************************************************
 ;		INPUT
-; zpar.w = dividing factor (times two?)
+; zpar.w = dividing factor (times two?) IN LITTLE ENDIAN???
 ;		OUTPUT
 ; C = busy
 ;
@@ -543,39 +550,32 @@ rl_cr:
 ; should also be Phi2-rate independent... input as Hz, or 100uS steps?
 ; *******TO BE REVISED*********
 set_fg:
-;6502******************************************************************
-	LDA zpar
-	ORA zpar+1
-		BEQ fg_dis		; if zero, disable output
-	LDA VIA+ACR		; get current configuration
-		BMI fg_busy	; already in use
-	LDX VIA+T1LL	; get older T1 latch values
-	STX old_t1		; save them
-	LDX VIA+T1LH
-	STX old_t1+1
+; *** preliminary 6800 code ***
+	LDAA VIA+ACR		; get current configuration (4)
+	LDX VIA+T1LL		; get older T1 latch values (5)
+	STX old_t1			; save them (5)
 ; *** TO_DO - should compare old and new values in order to adjust quantum size accordingly ***
-	LDX zpar			; get new division factor
-	STX VIA+T1LL	; store it
-	LDX zpar+1
-	STX VIA+T1LH
-	STX VIA+T1CH	; get it running!
-	ORA #$C0		; enable free-run PB7 output
-	STA VIA+ACR		; update config
+	LDX zpar			; get new division factor (4) *** LITTLE ENDIAN
+		BEQ fg_dis			; if zero, disable output (4)
+	TSTA				; check current configuration (2)
+		BMI fg_busy			; already in use (4)
+	STX VIA+T1LL		; store it (6)
+	STX VIA+T1CL		; get it running! (6)
+	ORAA #$C0			; enable free-run PB7 output (2)
+fg_exit:
+	STAA VIA+ACR		; update config (5)
 fg_none:
-	_EXIT_OK		; finish anyway
+	_EXIT_OK			; finish anyway (7)
 fg_dis:
-	LDA VIA+ACR		; get current configuration
-		BPL fg_none	; it wasn't playing!
-	AND #$7F		; disable PB7 only
-	STA VIA+ACR		; update config
-	LDA old_t1		; older T1L_L
-	STA VIA+T1LL	; restore old value
-	LDA old_t1+1
-	STA VIA+T1LH	; it's supposed to be running already
+	TSTA				; check current configuration (2)
+		BPL fg_none			; it wasn't playing! (4)
+	ANDA #$7F			; disable PB7 only (2)
+	LDX old_t1			; older T1L (4)
+	STX VIA+T1LL		; restore old value, supposed to be running already (6)
 ; *** TO_DO - restore standard quantum ***
-		_BRA fg_none
+	BRA fg_exit			; usual ending (4)
 fg_busy:
-	_ERR(BUSY)		; couldn't set
+	_ERR(BUSY)			; couldn't set (9)
 
 
 ; ***********************************************************
@@ -585,61 +585,52 @@ fg_busy:
 ; acc B	= subfunction code
 ;		OUTPUT
 ; C	= not implemented?
-;		USES b_sig (calls B_SIGNAL)
+;		USES da_ptr & b_sig (calls B_SIGNAL)
 ; sd_flag is a kernel variable
 
 shutdown:
-	CMPB #PW_STAT		; is it going to suspend?
-		BEQ sd_stat			; don't shutdown system then!
-	CMPB #PW_CLEAN		; from end of main task
-		BEQ sd_2nd			; continue with second stage
-	STAB sd_flag		; store mode for later, first must do proper 
+	CMPB #PW_STAT		; is it going to suspend? (2)
+		BEQ sd_stat			; don't shutdown system then! (4)
+	CMPB #PW_CLEAN		; from end of main task (2)
+		BEQ sd_2nd			; continue with second stage (4)
+	STAB sd_flag		; store mode for later, first must do proper (4)
 system shutdown, note long addressing
 ; ask THE braid to terminate
-	CLRB				; PID=0 means ALL braids
-	LDAA #SIGTERM		; will be asked to terminate
-	STAA b_sig			; store signal type
-	JMP signal			; ask braids to terminate, needs to return to task until the end
+	CLRB				; PID=0 means ALL braids (2)
+	LDAA #SIGTERM		; will be asked to terminate (2)
+	STAA b_sig			; store signal type (4)
+	JMP signal			; ask braids to terminate, will return to task until the end (...)
 ; ** the real stuff starts here **
 sd_2nd:
 ; now let's disable all drivers
-	SEI					; disable interrupts
+	SEI					; disable interrupts (2)
 ; call each driver's shutdown routine
-;6502******************************************************************
-	LDA drv_num			; get number of installed drivers
-	ASL					; twice the value as a pointer
-	TAX					; use as index
+	LDX drivers_ad		; preset index (5)
 ; first get the pointer to each driver table
 sd_loop:
 ; get address index
-		DEX					; go back one address
-		DEX
-		LDA drivers_ad+1, X	; get address MSB (4)
-		BEQ sd_done			; not in zeropage
-		STA da_ptr+1		; store pointer (3)
-		LDA drivers_ad, X	; same for LSB (4+3)
-		STA da_ptr
-		_PHX				; save index for later
-		LDY #D_BYE			; offset for shutdown routine --- eeeeeek!
-		JSR dr_call			; call routine from generic code!
-		_PLX				; retrieve index
-		BNE sd_loop			; repeat until zero
-; ***************************************************
-
+		STX da_ptr			; local index copy (5)
+		LDX 0, X			; get pointer to header (6)
+			BEQ sd_done			; not ended (4)
+		JSR D_BYE, X		; call exit routine! cannot use da_ptr (8...)
+		LDX da_ptr			; retrieve list pointer (4)
+		INX					; advance to next entry (4+4)
+		INX
+		BRA sd_loop			; repeat until zero (4)
 ; ** system cleanly shut, time to let the firmware turn-off or reboot **
 sd_done:
-	LDAB sd_flag		; retrieve mode
-	CMPB #PW_STAT		; suspend?
-		BEQ sd_fw			; tell firmware!
-	CMPB #PW_OFF		; poweroff?
-		BEQ sd_fw			; tell firmware!
-	CMPB #PW_COLD		; cold boot?
-		BEQ sd_fw			; tell firmware!
-	CMPB #PW_WARM		; just a warm restart?
-	BEQ sd_warm			; will not tell firmware, just jump there
-		_ERR(INVALID)		; unrecognised command!
+	LDAB sd_flag		; retrieve mode (3)
+	CMPB #PW_STAT		; suspend? (2)
+		BEQ sd_fw			; tell firmware! (4)
+	CMPB #PW_OFF		; poweroff? (2)
+		BEQ sd_fw			; tell firmware! (4)
+	CMPB #PW_COLD		; cold boot? (2)
+		BEQ sd_fw			; tell firmware! (4)
+	CMPB #PW_WARM		; just a warm restart? (2)
+	BEQ sd_warm			; will not tell firmware, just jump there (4)
+		_ERR(INVALID)		; unrecognised command! (9)
 sd_warm:
-	JMP warm			; firmware no longer should take pointer, generic kernel knows anyway
+	JMP warm			; firmware no longer should take pointer, generic kernel knows anyway (3)
 sd_fw:
 	_ADMIN(POWEROFF)	; except for suspend, shouldn't return...
 	RTS					; for suspend or not implemented
