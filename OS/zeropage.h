@@ -1,6 +1,6 @@
 ; minimOS-63 zeropage
-; v0.6a4
-; last modified 20170607-1054
+; v0.6a5
+; last modified 20170607-1200
 
 .zero
 * = 0
@@ -75,7 +75,7 @@ dq_off	= dr_aut+1
 dq_ptr	= dr_aut+2
 
 ; *** include aliases here for local2/locpt2 ***
-da_ptr: exec_p: rl_dev: ma_lim: loc_str:
+da_ptr: exec_p: rl_dev: ma_lim:
 local2: locpt2	.dsb	4	; variables for kernel functions @ $E8
 
 dr_id	= da_ptr+2
@@ -85,6 +85,8 @@ dr_feat	= da_ptr+3
 dte_ptr: exe_sp: rh_scan:
 rl_cur: ex_wr:
 local3: locpt3	.dsb	4	; variables for kernel functions @ $EC
+
+loc_str	= rh_scan+2			; temporary string pointer
 
 ; ***********************
 ; ** kernel parameters **

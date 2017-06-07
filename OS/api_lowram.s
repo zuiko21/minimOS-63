@@ -33,7 +33,7 @@ pqmanage:
 ; io_c	= char
 ;		OUTPUT
 ; C = I/O error
-;		USES da_ptr, iol_dev, plus whatever the driver takes
+;		USES da_ptr, dr_id, plus whatever the driver takes
 
 cio_of = dr_id			; parameter switching between CIN and COUT, must leave da_ptr clear!
 
@@ -99,7 +99,7 @@ cio_jmp:
 ;		OUTPUT
 ; io_c	= char
 ; C		= not available
-;		USES iol_dev, and whatever the driver takes
+;		USES dr_id and whatever the driver takes
 ; cin_mode is a kernel variable
 
 cin:
@@ -454,38 +454,28 @@ ll_valid:
 ; str_pt	= pointer to string
 ;		OUTPUT
 ; C = device error
-;		USES iol_dev and whatever COUT takes
+;		USES iol_dev, loc_str and whatever COUT takes
 
 string:
-;6502******************************************************************
-	STY iol_dev			; save Y
-	LDY #0				; reset new index
-	LDA str_pt+1		; get older MSB in case it changes
-	PHA					; save it somewhere!
+	STAB iol_dev		; save device (4)
+	LDX str_pt			; get pointer (4)
 str_loop:
-		LDA (str_pt), Y		; get character, new approach
-			BEQ str_end			; NUL = end-of-string
-		STA io_c			; store output character for COUT
-		_PHY				; save current index
-		LDY iol_dev			; retrieve device number
-		_KERNEL(COUT)		; call routine
+		LDAA 0, X			; get character (5)
+			BEQ str_end			; NUL = end-of-string (4)
+		STAA io_c			; store output character for COUT (4)
+		STX loc_str			; save current index (5)
+		LDAB iol_dev		; retrieve device number (3)
+		_KERNEL(COUT)		; call routine (...)
 #ifdef	SAFE
-		BCC str_nerr		; extra check
-			PLA					; cleanup stack
-			_BRA str_exit		; return error code (and restore pointer)
-str_nerr:
+			BCS str_abort		; extra check, nothing more to restore (4)
 #endif
-		_PLY				; retrieve index
-		INY					; eeeeeeeek!
-		BNE str_loop		; repeat, will later check for termination
-	INC str_pt+1		; next page, unfortunately
-	BNE str_loop		; no need for BRA
+		LDX loc_str			; retrieve index (4)
+		INX					; eeeeeeeek! (4)
+		BRA str_loop		; repeat, will later check for termination (4)
 str_end:
-	CLC					; no errors
-str_exit:
-	PLA					; get MSB back
-	STA str_pt+1		; restore it
-	RTS					; return error code
+	CLC					; no errors (2)
+str_abort:
+	RTS					; return possible error code (5)
 
 
 ; ******************************
