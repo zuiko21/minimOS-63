@@ -2,7 +2,7 @@
 ; sort-of generic template
 ; v0.6a5
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170606-2235
+; last modified 20170607-1109
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -183,18 +183,18 @@ std_nmi:
 
 fw_gestalt:
 
-	LDAB fw_cpu			; get kind of CPU (previoulsy stored or determined)
-	LDAA #SPEED_CODE	; speed code as determined in options.h
-	STAB cpu_ll			; set outputs
+	LDAB fw_cpu			; get kind of CPU (previoulsy stored or determined) (3)
+	LDAA #SPEED_CODE	; speed code as determined in options.h (2)
+	STAB cpu_ll			; set outputs (4+4)
 	STAA c_speed
-	LDAA himem			; get pages of SRAM???
-	STAA k_ram			; store output
+	LDAA himem			; get pages of SRAM??? (3)
+	STAA k_ram			; store output (4)
 ; no "high" RAM on this architecture
-	LDX #fw_mname		; get string pointer
-	STX str_pt			; put it outside
-	LDX #fw_map			; pointer to standard map TBD ????
-	STX ex_pt			; set output
-	_DR_OK				; done
+	LDX #fw_mname		; get string pointer (3)
+	STX str_pt			; put it outside (5)
+	LDX #fw_map			; pointer to standard map TBD ???? (3)
+	STX ex_pt			; set output (5)
+	_DR_OK				; done (7)
 
 
 ; SET_ISR, set IRQ vector

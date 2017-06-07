@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel API for LOWRAM systems
 ; v0.6a4
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170607-1044
+; last modified 20170607-1112
 
 ; *** dummy function, non implemented ***
 unimplemented:		; placeholder here, not currently used
@@ -347,101 +347,103 @@ set_handler:
 ; str_pt	= pointer to filename path (will be altered!)
 ;		OUTPUT
 ; ex_pt		= pointer to executable code
-;		USES rh_scan AND loc_str (new 20170606)
+;		USES rh_scan (modifies it!) AND loc_str (new 20170606)
 
 load_link:
 ; *** look for that filename in ROM headers ***
 ; get initial scanning address as local variable
-	LDX #ROM_BASE		; begin of ROM contents
-	STX	rh_scan			; set local pointer
+	LDX #ROM_BASE		; begin of ROM contents (3)
+	STX	rh_scan			; set local pointer (5)
 ll_geth:
 ; no need to correct parameter pointer as will use independent pointers anyway
-		LDX str_pt			; get string pointer
-		STX loc_str			; temporary internal pointer
-		LDX rh_scan			; *** reload scanning address ***
+		LDX str_pt			; get string pointer (4)
+		STX loc_str			; temporary internal pointer (5)
+		LDX rh_scan			; *** reload scanning address *** (4)
 ; ** check whether we are on a valid header!!! **
-		LDAA 0, X			; first of all should be a NUL
+		LDAA 0, X			; first of all should be a NUL (5)
 #ifdef	SAFE
-		ORAA 254, X			; last word is CLEAR on 6800 architecture
-		ORAA 255, X			; ***or put the whole 32-bit as big-endian?***
+		ORAA 254, X			; last word is CLEAR on 6800 architecture (5)
+		ORAA 255, X			; ***or put the whole 32-bit as big-endian?*** (5)
 #endif 
-			BNE ll_nfound		; link was lost, no more to scan
-		LDAA 7, X			; after type and size, get eigth byte in header
-		CMPA #CR			; was it a CR?
-			BNE ll_nfound		; if not, go away
+			BNE ll_nfound		; link was lost, no more to scan (4)
+		LDAA 7, X			; after type and size, get eigth byte in header (5)
+		CMPA #CR			; was it a CR? (2)
+			BNE ll_nfound		; if not, go away (4)
 ; look for the name
 ll_nloop:
-			LDAA 8, X			; get character in found name from its offset
-			LDX loc_str			; switch to name pointer
-			CMPA 0, X			; compare with what we are looking for
-				BNE ll_nthis		; difference found
-			INX					; advance this local name pointer...
-			STX loc_str			; ...update stored...
-			LDX rh_scan			; ...and switch back to header pointer
-			TST 8, X			; otherwise check whether at EOL
-				BEQ ll_found		; all were zero, both ended names are the same! note different offset
-			INX					; otherwise continue scanning
-			STX rh_scan			; ...and update...
-			BRA ll_nloop		; will not do forever until aborted
+			LDAA 8, X			; get character in found name from its offset (5)
+			LDX loc_str			; switch to name pointer (4)
+			CMPA 0, X			; compare with what we are looking for (5)
+				BNE ll_nthis		; difference found (4)
+			INX					; advance this local name pointer... (4)
+			STX loc_str			; ...update stored... (5)
+			LDX rh_scan			; ...and switch back to header pointer (4)
+			TST 8, X			; otherwise check whether at EOL (7)
+				BEQ ll_found		; all were zero, both ended names are the same! note different offset (4)
+			INX					; otherwise continue scanning (4)
+			STX rh_scan			; ...and update... (5)
+			BRA ll_nloop		; will not do forever until aborted (4)
 ll_nthis:
 ; not this one, correct local pointer for the next header
-		CLR rh_scan+1		; reset LSB, assuming page-aligned headers!
-		LDX rh_scan			; get full pointer to current header
-		LDAA 252, X			; relative offset to number of pages
-		LDAB 253, X			; also number of bytes (***last word is unused!***)
-		BEQ ll_bound		; if it does not cross boundary, do not advance page
-			INCA				; otherwise goes into next page
+		CLR rh_scan+1		; reset LSB, assuming page-aligned headers! (6)
+		LDX rh_scan			; get full pointer to current header (4)
+		LDAA 252, X			; relative offset to number of pages (5)
+		LDAB 253, X			; also number of bytes (***last word is unused!***) (5)
+		BEQ ll_bound		; if it does not cross boundary, do not advance page (4)
+			INCA				; otherwise goes into next page (2)
 ll_bound:
-		INCA				; skip header too!
-		ADDA rh_scan		; add to previous value
-		STAA rh_scan		; update pointer
-		CLR rh_scan+1		; keep it page-aligned!
-		BCC ll_geth			; inspect new header (if no overflow!)
+		INCA				; skip header too! (2)
+		ADDA rh_scan		; add to previous value (3)
+		STAA rh_scan		; update pointer (4)
+		CLR rh_scan+1		; keep it page-aligned! (6)
+		BCC ll_geth			; inspect new header, if no overflow! (4)
 ll_nfound:
-	_ERR(N_FOUND)		; all was scanned and the query was not found
+	_ERR(N_FOUND)		; all was scanned and the query was not found (9)
 ll_found:
 ; from original LOADLINK code
-	CLR rh_scan+1		; reset LSB, assuming page-aligned headers!
-	LDX rh_scan			; only header pointer will get used from here
-	LDAA 1, X			; check filetype
-	CMPA #'m'			; must be minimOS app!
-		BNE ll_wrap		; error otherwise
-	LDAA 2, X			; next byte is CPU type
+	CLR rh_scan+1		; reset LSB, assuming page-aligned headers! (6)
+	LDX rh_scan			; only header pointer will get used from here (4)
+	LDAA 1, X			; check filetype (5)
+	CMPA #'m'			; must be minimOS app! (2)
+		BNE ll_wrap		; error otherwise (4)
+	LDAA 2, X			; next byte is CPU type (5)
 ; check compability of supplied code against present CPU
-	LDAB fw_cpu			; *** UGLY HACK, this is a FIRMWARE variable ***
-	CMPB #'H'			; is it a 68HC11 MCU?
-		BEQ ll_hc11			; all Motorola is OK, but not Hitachi!
-	CMPB #'K'			; Hitachi microcontroller?
-		BEQ ll_hitachi		; native and 6803 down is OK
-	CMPB #'U'			; Motorola 6801/6803 microcontroller?
-		BEQ ll_mcu			; 6800-6803 only
-	CMPB #'M'			; old plain 6800/6802/6808?
-		BEQ ll_basic			; only basic code will do
+	ADMIN(GESTALT)		; fetch system info (3+8+43)
+	LDAB cpu_ll			; the parameter we are looking for (3)
+;	LDAB fw_cpu			; *** UGLY HACK, this is a FIRMWARE variable *** (3)
+	CMPB #'H'			; is it a 68HC11 MCU? (2)
+		BEQ ll_hc11			; all Motorola is OK, but not Hitachi! (4)
+	CMPB #'K'			; Hitachi microcontroller? (2)
+		BEQ ll_hitachi		; native and 6803 down is OK (4)
+	CMPB #'U'			; Motorola 6801/6803 microcontroller? (2)
+		BEQ ll_mcu			; 6800-6803 only (4)
+	CMPB #'M'			; old plain 6800/6802/6808? (2)
+		BEQ ll_basic			; only basic code will do (4)
 	_PANIC("{CPU?}")	; *** should NEVER arrive here, unless firmware variables are corrupt! ***
 ll_hc11:
-	CMPA #'H'			; code has HC11 extensions?
-		BEQ ll_valid		; that is OK...
-		BRA ll_mcu			; ...but skip Hitachi code
+	CMPA #'H'			; code has HC11 extensions? (2)
+		BEQ ll_valid		; that is OK... (4)
+		BRA ll_mcu			; ...but skip Hitachi code (4)
 ll_hitachi:
-	CMPA #'K'			; Hitachi code?
-		BEQ ll_valid		; this and old MCU code will do
+	CMPA #'K'			; Hitachi code? (2)
+		BEQ ll_valid		; this and old MCU code will do (4)
 ll_mcu:
-	CMPA #'U'			; 6801/6803 code?
-		BEQ ll_valid		; will tolerate old 6800 too
+	CMPA #'U'			; 6801/6803 code? (2)
+		BEQ ll_valid		; will tolerate old 6800 too (4)
 ll_basic:
-	CMPA #'M'			; every supported CPU can run 6800 code
-	BEQ ll_valid		; otherwise is code for another architecture!
+	CMPA #'M'			; every supported CPU can run 6800 code (2)
+	BEQ ll_valid		; otherwise is code for another architecture! (4)
 ll_wrap:
-		_ERR(INVALID)		; something was wrong
+		_ERR(INVALID)		; something was wrong (9)
 ; present CPU is able to execute supplied code
 ll_valid:
-	LDAA rh_scan		; get pointer MSB
+	LDAA rh_scan		; get pointer MSB (3)
 ;	LDAB rh_scan+1		; and MSB (should be zero!)
-	INCA				; start from next page, skipping header
-	STAA ex_pt			; save execution pointer
+	INCA				; start from next page, skipping header (2)
+	STAA ex_pt			; save execution pointer (4)
 ;	STAB ex_pt+1		; LSB too
-	CLR ex_pt+1			; assuming page-aligned headers
-	_EXIT_OK
+	CLR ex_pt+1			; assuming page-aligned headers (6)
+	_EXIT_OK			; ready to go (7)
 
 
 ; *********************************
