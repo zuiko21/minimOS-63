@@ -103,63 +103,65 @@ cio_jmp:
 ; cin_mode is a kernel variable
 
 cin:
-	LDAA #D_CIN			; only difference from cout, as long as is not zero!
-	STAA cio_of			; store for further addition/selection
-	TSTB				; for indexed comparisons
-	BNE ci_port			; specified
-		LDAB std_in			; default input device
-	BNE ci_port			; eeeeeeeeeek
-		LDAB #DEVICE		; *** somewhat ugly hack ***
+	LDAA #D_CIN			; only difference from cout, as long as is not zero! (2)
+	STAA cio_of			; store for further addition/selection (4)
+	TSTB				; for indexed comparisons (2)
+	BNE ci_port			; specified (4)
+		LDAB std_in			; default input device (3)
+	BNE ci_port			; eeeeeeeeeek (4)
+		LDAB #DEVICE		; *** somewhat ugly hack *** (2)
 ci_port:
-	BPL ci_nph			; logic device
-		JSR cio_phys		; check physical devices... but come back for events! new 20150617
-			BCS ci_exit			; some error, send it back
+	BPL ci_nph			; logic device (4)
+		JSR cio_phys		; check physical devices and try to get char... but come back for events! (9)
+			BCS ci_exit			; some error, send it back (4)
 ; ** EVENT management **
 ; this might be revised, or supressed altogether!
-		LDAA io_c			; get received character
-		CMPA #' '-1			; printable?
-			BLS ci_manage		; if not, might be an event
+		LDAA io_c			; get received character (3)
+		CMPA #' '-1			; printable? (2)
+			BLS ci_manage		; if not, might be an event (4)
 ci_exitOK:
-		CLC					; otherwise, no error --- eeeeeeeek!
+		CLC					; otherwise, no error --- eeeeeeeek! (2)
 ci_exit:
-		RTS					; above comparison would set carry
+		RTS					; above comparison would set carry (5)
 ; ** continue event management **
 ci_manage:
-; check for binary mode
-	TST cin_mode		; get flag, new sysvar 20150617
-	BEQ ci_event		; should process possible event
-		CLR cin_mode		; back to normal mode
-		BRA ci_exitOK		; and return whatever was received
+; check for binary mode first
+	TST cin_mode		; was it in binary mode? (6)
+	BEQ ci_event		; if not, should process possible event (4)
+		CLR cin_mode		; otherwise back to normal mode (6)
+		_EXIT_OK			; and return whatever was received (7)
+; standard mode must check for events
 ci_event:
-	CMPA #16			; is it DLE?
-	BNE ci_notdle		; otherwise check next
-		STAA cin_mode		; set binary mode! SAFER!
-		BNE ci_abort		; and supress received character, no need for BRA
+	CMPA #16			; is it DLE? (2)
+	BNE ci_notdle		; otherwise check next (4)
+		STAA cin_mode		; set binary mode! SAFER! (5)
+		BRA ci_abort		; and supress received character (4)
 ci_notdle:
-	CMPA #3				; is it ^C? (TERM)
+	CMPA #3				; is it ^C/TERM? (2)
 	BNE ci_exitOK		; otherwise there's no more to check -- only signal for single-task systems!
-		LDAB #SIGTERM
-		STAB b_sig			; set signal as parameter
+		LDAB #SIGTERM		; signal to be sent (2)
+		STAB b_sig			; set signal as parameter (4)
 #ifdef	SAFE
-		CLRB				; sent to all, this is the only one (skimming a couple of bytes!)
+		CLRB				; sent to all, this is the only one (2)
 #endif
-		JSR signal			; send signal FASTER
+		JSR signal			; send signal FASTER (9)
 ci_abort:
-		_ERR(EMPTY)			; no character was received
-
+		_ERR(EMPTY)			; no character was received (9)
+		
+; *** check for some logical devices ***
 ci_nph:
 ; only logical devs, no need to check for windows or filesystem
-	CMPB #DEV_RND		; getting a random number?
-		BEQ ci_rnd			; compute it!
-	CMPB #DEV_NULL		; lastly, ignore input
-		BNE cio_nfound		; final error otherwise
-	_EXIT_OK			; "/dev/null" is always OK
+	CMPB #DEV_RND		; getting a random number? (2)
+		BEQ ci_rnd			; compute it! (4)
+	CMPB #DEV_NULL		; lastly, ignore input (2)
+		BNE cio_nfound		; final error otherwise (4)
+	_EXIT_OK			; "/dev/null" is always OK (7)
 
 ci_rnd:
-; *** generate random number (6800) ***
-	LDAA ticks+1		; simple placeholder
-	STAA io_c			; eeeeeeek
-	_EXIT_OK
+; *** generate random number ***
+	LDAA ticks+1		; simple placeholder (5)
+	STAA io_c			; eeeeeeek (4)
+	_EXIT_OK			; (7)
 
 
 ; **************************************
