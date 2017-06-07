@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel API for LOWRAM systems
 ; v0.6a4
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170607-1015
+; last modified 20170607-1044
 
 ; *** dummy function, non implemented ***
 unimplemented:		; placeholder here, not currently used
@@ -56,7 +56,7 @@ co_port:
 		_EXIT_OK			; "/dev/null" is always OK (7)
 cio_phys:
 	LDX #drivers_id		; pointer to ID list (3)
-	LDAA drv_num		; number of drivers (4*)
+	LDAA drv_num		; number of drivers (3)
 		BEQ cio_nfound		; no drivers at all! (4)
 cio_loop:
 		CMPB 0, X			; get ID from list (5)
@@ -68,7 +68,7 @@ cio_nfound:
 	_ERR(N_FOUND)		; unknown device (9)
 cio_dev:
 	NEGA				; driver countdown will be subtracted! (2)
-	ADDA drv_num		; compute driver position in list (4*)
+	ADDA drv_num		; compute driver position in list (3)
 	ASLA				; two times is offset LSB for drivers_ad list (2)
 	ADDA #<drivers_ad	; take table LSB (2)
 	LDAB #>drivers_ad	; same for MSB (2)
@@ -134,7 +134,7 @@ ci_manage:
 ci_event:
 	CMPA #16			; is it DLE? (2)
 	BNE ci_notdle		; otherwise check next (4)
-		STAA cin_mode		; set binary mode! SAFER! (5)
+		STAA cin_mode		; set binary mode! SAFER! (4)
 		BRA ci_abort		; and supress received character (4)
 ci_notdle:
 	CMPA #3				; is it ^C/TERM? (2)
@@ -159,7 +159,7 @@ ci_nph:
 
 ci_rnd:
 ; *** generate random number ***
-	LDAA ticks+1		; simple placeholder (5)
+	LDAA ticks+1		; simple placeholder (3)
 	STAA io_c			; eeeeeeek (4)
 	_EXIT_OK			; (7)
 
@@ -176,9 +176,9 @@ ci_rnd:
 ; C	= not supported/not available
 
 open_w:
-	LDX w_rect			; asking for some size? takes 16-bit
-	BEQ ow_no_window	; wouldn't do it
-		_ERR(NO_RSRC)
+	LDX w_rect			; asking for some size? takes 16-bit (4)
+	BEQ ow_no_window	; wouldn't do it (4)
+		_ERR(NO_RSRC)		; no windows (9)
 ow_no_window:
 ; ...and continue into following functions, returning just 0 in acc B
 
@@ -201,11 +201,11 @@ ow_no_window:
 
 get_pid:
 b_fork:
-	LDAB #0				; no multitasking, system reserved PID
+	LDAB #0				; no multitasking, system reserved PID (2)
 yield:
 close_w:
 free_w:
-	_EXIT_OK
+	_EXIT_OK			; all done (7)
 
 
 ; **************************************
@@ -217,14 +217,14 @@ free_w:
 
 uptime:
 	_ENTER_CS			; do not change while copying, A is preserved (4)
-	LDX ticks			; get system variable word (5)
-	STX up_ticks		; and store them in output parameter (5)
-	LDX ticks+2			; get system variable word (5)
-	STX up_sec			; and store them in output parameter (5)
-	LDX ticks+4			; get system variable last word (5)
+	LDX ticks			; get system variable word (4)
+	STX up_ticks		; and store it in output parameter (5)
+	LDX ticks+2			; get system variable word (4)
+	STX up_sec			; and store it in output parameter (5)
+	LDX ticks+4			; get system variable last word (4)
 	STX up_sec+2		; and store it in output parameter (5)
 	_EXIT_CS			; A was preserved (2)
-	_EXIT_OK
+	_EXIT_OK			; (7)
 
 
 ; *****************************************
@@ -240,15 +240,15 @@ uptime:
 b_exec:
 ; non-multitasking version
 #ifdef	SAFE
-	TSTB				; should be system reserved PID
-	BEQ ex_st			; OK for single-task system
-		_ERR(NO_RSRC)		; no way without multitasking
+	TSTB				; should be system reserved PID (2)
+	BEQ ex_st			; OK for single-task system (4)
+		_ERR(NO_RSRC)		; no way without multitasking (9)
 ex_st:
 #endif
-	LDS #SPTR			; init stack
+	LDS #SPTR			; init stack (3)
 ; set default SIGTERM handler! eeeeeeeeeeeeeeeeeeeeek
-	LDX #sig_kill		; default TERM
-	STX mm_sterm		; set variable
+	LDX #sig_kill		; default TERM (3)
+	STX mm_sterm		; set variable (
 ; this is how a task should replace the shell
 	LDAA #ZP_AVAIL		; eeeeeeeeeeek
 	STAA z_used			; otherwise SAFE will not work
