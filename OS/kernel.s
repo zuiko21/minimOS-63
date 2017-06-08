@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel
 ; v0.6a5
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170608-0953
+; last modified 20170608-1433
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -63,15 +63,15 @@ warm:
 #endif
 
 ; install ISR code (as defined in "isr/irq.s" below)
-	LDX #k_isr			; get address
-	STX ex_pt			; no need to know about actual vector location
+	LDX #k_isr			; get address (3)
+	STX ex_pt			; no need to know about actual vector location (5)
 	_ADMIN(SET_ISR)		; install routine
 
 ; Kernel no longer supplies default NMI, but could install it otherwise
 
 ; *** default action in case the scheduler runs out of tasks ***
-	LDAA #PW_STAT		; default action upon complete task death
-	STAA sd_flag			; this is important to be clear (PW_STAT) or set as proper error handler
+	LDAA #PW_STAT		; default action upon complete task death (2)
+	STAA sd_flag			; this is important to be clear (PW_STAT) or set as proper error handler (5)
 
 ; *****************************
 ; *** memory initialisation ***
@@ -80,16 +80,16 @@ warm:
 ; this should take a basic memory map from firmware, perhaps via the GESTALT function
 #ifndef		LOWRAM
 ; ++++++
-	LDX #256*FREE_RAM+END_RAM	; get status of both ends
-	STX ram_stat		; as it is the first entry, no index needed
-	LDAA #>user_sram	; beginning of available ram, as defined... in rom.s
-	LDAB #<user_sram	; LSB misaligned?
-	BEQ ram_init		; nothing to align
-		INCA				; otherwise start at next page
+	LDX #256*FREE_RAM+END_RAM	; get status of both ends (3)
+	STX ram_stat		; as it is the first entry, no index needed (6)
+	LDAA #>user_sram	; beginning of available ram, as defined... in rom.s (2)
+	LDAB #<user_sram	; LSB misaligned? (2)
+	BEQ ram_init		; nothing to align (4)
+		INCA				; otherwise start at next page (2)
 ram_init:
-	STAA ram_pos			; store it, this is PAGE number
-	LDAA #SRAM			; number of SRAM pages as defined in options.h *** revise
-	STAA ram_pos+1		; store second entry and we are done!
+	STAA ram_pos			; store it, this is PAGE number (5)
+	LDAA #SRAM			; number of SRAM pages as defined in options.h (2) *** revise
+	STAA ram_pos+1		; store second entry and we are done! (5)
 ; ++++++
 #endif
 
@@ -285,88 +285,121 @@ dr_eol:
 ; *** 5) register interrupt routines *** new, much cleaner approach ***** REVISE
 		LDAA dr_feat		; get original auth code (3)
 		STAA dr_aut			; and keep for later! (4)
-; time to get a pointer to the-block-of-pointers (source)
-		LDX da_ptr			; work with current header (4)
-		LDX D_POLL, X		; get this pointer (6)
-		STX sysptr			; store it ***** check! (5)
-; also a temporary pointer to the particular queue
-		LDX #drv_poll		; must be the first one? (3)
-		STX dq_ptr			; store temporarily (5)
-; new functionality 170519, pointer to (interleaved) task enabling queues
-		LDX #drv_p_en		; this is the second one, will be decremented for async? (3)
-		STX dte_ptr			; yet another temporary pointer... (5)
 ; all set now, now easier to use a loop, not sure on 6800
-
-		LDAB #1				; index for loop (2)
-
-; ***** 6502 ***************** 6502 ***************** 6502 *****
-dr_iqloop:
-			ASL dr_aut			; extract MSB (will be A_POLL first, then A_REQ)
-			BCC dr_noten		; skip installation if task not enabled
+; preliminary 6800 does NOT use a loop
+; let us go for P-queue first
+		ASL dr_aut			; extract MSB (will be A_POLL first, then A_REQ)
+		BCC dr_notpq		; skip installation if task not enabled (4)
+; time to get a pointer to the-block-of-pointers (source)
+			LDX da_ptr			; work with current header (4)
+			LDX D_POLL, X		; get this pointer (6)
+			STX sysptr			; store it ***** check! (5)
 ; prepare another entry into queue
-;				LDY queues_mx, X	; get index of free entry!
-;				STY dq_off			; worth saving on a local variable
-				LDAA queues_mx
-				STAA dq_off
-;				INC queues_mx, X	; add another task in queue
-;				INC queues_mx, X	; pointer takes two bytes
-				ADDA #2
-				STAA queues_mx
-; install entry into queue
-;				JSR dr_itask		; install into queue
-; save for frequency queue, flags must be enabled for this task!
-;				LDY dq_off			; get index of free entry!
-;				LDA dr_id			; use ID as flags, simplifies search and bit 7 hi (as per physical device) means enabled by default
-;				STA (dte_ptr), Y	; set default flags
-; let us see if we are doing periodic task, in case frequency must be set also
-;				TXA					; doing periodic?
-;					BEQ dr_next			; if zero, is doing async queue, thus skip frequencies (in fact, already ended)
-;				JSR dr_nextq		; advance to next queue (frequencies)
-;				JSR dr_itask		; same for frequency queue
-;				_BRA dr_doreq		; nothing to skip, go for async queue
-dr_noten:
-;			JSR dr_nextq		; if periodic was not enabled, this will skip frequencies queue
-dr_doreq:
-; as this will get into async, switch enabling queue
-;			LDA dte_ptr			; check previous LSB
-;			BNE dr_neqnw		; will wrap upon decrement?
-;				DEC dte_ptr+1		; if so, precorrect MSB
-dr_neqnw:
-;			DEC dte_ptr			; one before as it is interleaved
-; continue into async queue
-;			JSR dr_nextq		; go for next queue
-;			DEX					; now 0, index for async queue (2)
-;			BPL dr_iqloop		; eeeeek
+			LDAA queues_mx+1	; get index of free P-entry! (4)
+			TAB					; two copies (2)
+; MCUs do much better
+;			LDX #drv_poll		; whole pointer... (3)
+;			ABX					; ...gets increased... (3)
+;			STX dq_ptr			; ...and stored (4)
+			ADDB #<drv_poll		; add to base of queue (2)
+			STAB dq_ptr+1		; LSB is ready (4)
+			LDAB #>drv_poll		; go for MSB (2)
+			ADCB #0				; propagate carry (2)
+			STAB dq_ptr			; complete pointer (4)
+; flags must be enabled for this task!
+			TAB					; get queue index again (2)
+; again, MCUs do much better
+;			LDX #drv_p_en		; whole pointer... (3)
+;			ABX					; ...gets increased... (3)
+;			STX dte_ptr			; ...and stored* (4)
+			ADDB #<drv_p_en		; add to base of queue (2)
+			STAB dte_ptr+1		; LSB is ready (4)
+			LDAB #>drv_p_en		; go for MSB (2)
+			ADCB #0				; propagate carry (2)
+			STAB dte_ptr		; complete pointer (4)
+; pointer to enable-array is ready, fill it!
+			LDX dte_ptr			; MCU could waive this* (4)
+			LDAB dr_id			; use ID as enabling value, as has bit 7 high (3)
+			STAB 0, X			; enabled! (6)
+; an entry is being inserted, thus update counter
+			ADDA #2				; another entry added (A had original count) (2)
+			STAA queues_mx+1	; update P-counter (5)
+; insert task and advance queue
+			BSR dr_itask		; install entry into queue (8+35, 8+23 MCU)
+			BSR dr_nextq		; and advance to next! (frequency) (8+40, 8+28 MCU)
+; the currently pointed word is freq value, just copy it into currently pointed queue
+			BSR dr_itask		; install entry into queue, no need to advance (8+35, 8+23 MCU)
+; P-queue is done, let us go to simpler R-queue
+dr_notpq:
+		ASL dr_aut			; extract MSB (now is A_REQ) (6)
+		BCC dr_notrq		; skip installation if task not enabled (4)
+; worth advancing just the header pointer
+			LDX da_ptr			; work with current header (4)
+			LDX D_REQ, X		; get this pointer (6)
+			STX sysptr			; store it ***** check! (5)
+; prepare another entry into queue
+			LDAA queues_mx		; get index of free R-entry! (4)
+			TAB					; two copies (2)
+; MCUs do much better
+;			LDX #drv_poll		; whole pointer... (3)
+;			ABX					; ...gets increased... (3)
+;			STX dq_ptr			; ...and stored (4)
+			ADDB #<drv_poll		; add to base of queue (2)
+			STAB dq_ptr+1		; LSB is ready (4)
+			LDAB #>drv_poll		; go for MSB (2)
+			ADCB #0				; propagate carry (2)
+			STAB dq_ptr			; complete pointer (4)
+; flags must be enabled for this task!
+			TAB					; get queue index again (2)
+; again, MCUs do much better
+;			LDX #drv_p_en		; whole pointer... (3)
+;			ABX					; ...gets increased... (3)
+;			STX dte_ptr			; ...and stored* (4)
+			ADDB #<drv_r_en		; add to base of queue (2)
+			STAB dte_ptr+1		; LSB is ready (4)
+			LDAB #>drv_r_en		; go for MSB (2)
+			ADCB #0				; propagate carry (2)
+			STAB dte_ptr		; complete pointer (4)
+; pointer to enable-array is ready, fill it!
+			LDX dte_ptr			; MCU could waive this* (4)
+			LDAB dr_id			; use ID as enabling value, as has bit 7 high (3)
+			STAB 0, X			; enabled! (6)
+; an entry is being inserted, thus update counter
+			ADDA #2				; another entry added (A had original count) (2)
+			STAA queues_mx		; update R-counter (5)
+; insert task, no need to advance queues any more
+			BSR dr_itask		; install entry into queue (8+35, 8+23 MCU)
+dr_notrq:
 
 ; *** 6) continue initing drivers ***
-		BRA dr_next		; if arrived here, did not fail initialisation
+		BRA dr_next		; if arrived here, did not fail initialisation (4)
 
 dr_abort:
 ; *** if arrived here, driver initialisation failed in some way! ***
 #ifdef	LOWRAM
 ; ------ low-RAM systems keep count of installed drivers ------
-			LDX #drivers_id		; beginning of ID list
-			LDAB drv_num		; number of drivers registered this far
+			LDX #drivers_id		; beginning of ID list (3)
+			LDAB drv_num		; number of drivers registered this far (3)
 dr_ablst:
-				INX					; advance pointer
-				DECB				; one less
-				BNE dr_ablst		; acc B will never start at 0!
-			LDAB #DEV_NULL		; invalid proper value...
-			STAB 0, X			; ...as unreachable entry
+				INX					; advance pointer (4)
+				DECB				; one less (2)
+				BNE dr_ablst		; acc B will never start at 0! (4)
+			LDAB #DEV_NULL		; invalid proper value... (2)
+			STAB 0, X			; ...as unreachable entry (6)
 ; ------
 #endif
 dr_next:
 #ifdef	LOWRAM
 ; ------ low-RAM systems keep count of installed drivers ------
-		INC drv_num			; update SINGLE index
+		INC drv_num			; update SINGLE index (6)
 ; ------
 #endif
 ; in order to keep drivers_ad in ROM, can't just forget unsuccessfully registered drivers...
 ; in case drivers_ad is *created* in RAM, dr_abort could just be here, is this OK with new separate pointer tables?
-		LDX drv_aix			; retrieve saved index
-		INX					; update ADDRESS index, even if unsuccessful
-		INX					; eeeeeeeek! pointer arithmetic!
-		JMP dr_loop			; go for next
+		LDX drv_aix			; retrieve saved index (4)
+		INX					; update ADDRESS index, even if unsuccessful (4)
+		INX					; eeeeeeeek! pointer arithmetic! (4)
+		JMP dr_loop			; go for next (3)
 
 ; ***************************
 ; *** points of no return ***
@@ -378,42 +411,44 @@ dr_error:
 ; *** some driver installation routines ***
 ; *****************************************
 
-; ***** 6502 ********************* 6502 ************************* 6502 *****
-; * routine for advancing to next queue *
-; both pointers in dq_ptr (whole queue) and sysptr (pointer in header)
-dr_nextq:
-;	LDA dq_ptr			; get original queue pointer
-;	CLC
-;	ADC #MAX_QUEUE		; go to next queue
-;	STA dq_ptr
-;	BCC dnq_nw			; no carry...
-;		INC dq_ptr+1		; ...or update MSB
-dnq_nw:
-;	LDA sysptr			; increment the origin pointer!
-;	CLC
-;	ADC #2				; next pointer in header
-;	STA sysptr			; eeeeeeeeeeek
-;	BCC dnq_snw			; no carry...
-;		INC sysptr+1		; ...or update MSB
-dnq_snw:
-	RTS
-
-; * routine for copying a pointer from header into a table *
-; sysptr & dq_ptr (updated) set as usual
+; * routine for copying a pointer from header into a table, plus advance to next queue *
+; sysptr & dq_ptr (will NOT get updated) set as usual
 dr_itask:
 ; *** preliminary 6800 version, room to optimise ***
-; read pointer from header
-	LDX sysptr			; get set pointer
-	LDAA 0, X			; indirect read MSB
-	LDAB 1, X			; and LSB
+; likely to get inline for MCUs
+; read address from header and update it!
+	LDX sysptr			; get set pointer (4)
+;	LDD 0, X			; MCUs get the whole word! (5)
+	LDAA 0, X			; indirect read MSB (5)
+	LDAB 1, X			; and LSB (5)
 ; write pointer into queue
-	LDX dq_ptr			; switch pointer (will be updated, not using dq_off)
-	STAA 0, X			; store fetched task pointer
-	STAB 1, X			; LSB too
-	INX					; go for next entry
-	INX
-	STX dq_ptr			; this has to be updated
+	LDX dq_ptr			; switch pointer (4)
+;	STD 0, X			; MCUs store whole word! (5)
+	STAA 0, X			; store fetched task pointer (6)
+	STAB 1, X			; LSB too (6+5)
 	RTS
+
+; * routine for advancing to next queue *
+; both pointers in dq_ptr (whole queue size) and sysptr (next word in header)
+; likely to get inlined as used only once just after dr_itask 
+dr_nextq:
+; update the original pointer
+	LDAB #MAX_QUEUE		; amount to add... (2)
+; MCUs do it much better!
+;	ABX					; ...to X which had dq_ptr as per previous dr_itask... (3)
+;	STX dq_ptr			; ...gets updated! (4)
+	ADDB dq_ptr+1		; ...to previous LSB (3)
+	LDAA dq_ptr			; MSB too (3)
+	ADCA #0				; propagate carry (2)
+	STAB dq_ptr+1		; update values (4)
+	STAA dq_ptr			; ready! (4)
+; and now the header reading pointer
+	LDX sysptr			; get set pointer (4)
+	INX					; go for next entry (4+4)
+	INX
+	STX sysptr			; this has to be updated (5+5)
+	RTS
+
 
 ; ***************************************************************
 ; *** drivers already installed, clean up things and continue ***
@@ -427,44 +462,44 @@ dr_ok:					; *** all drivers inited ***
 
 ; in case no I/O lock arrays were initialised... only for LOWRAM
 #ifdef	LOWRAM
-	CLR cin_mode		; single flag for non-multitasking systems
+	CLR cin_mode		; single flag for non-multitasking systems (6)
 #endif
 
 ; startup code, revise ASAP
-; *** set default I/O device ***
-	LDX #DEVICE*257			; as defined in options.h
-	STX default_in		; set word
+; *** set GLOBAL default I/O device ***
+	LDX #DEVICE*257		; as defined in options.h (3)
+	STX default_in		; set word (6)
 
 ; *** interrupt setup no longer here, firmware did it! ***
 
 ; new, show a splash message ever the kernel is restarted!
-	JSR ks_cr			; leading newline
-	LDX #kern_splash	; get pointer
-	STX str_pt			; set parameter
-	LDAB #DEVICE			; eeeeeek
-	_KERNEL(STRING)		; print it!
-	JSR ks_cr			; trailing newline
+	BSR ks_cr			; leading newline (8+...)
+	LDX #kern_splash	; get pointer (3)
+	STX str_pt			; set parameter (5)
+	LDAB #DEVICE		; eeeeeek (2)
+	_KERNEL(STRING)		; print it! (...)
+	BSR ks_cr			; trailing newline (8+...)
 
 ; ******************************
 ; **** launch monitor/shell ****
 ; ******************************
 sh_exec:
-	LDX #shell			; get pointer to built-in shell
-	STX ex_pt			; set execution address
-	LDX #DEVICE*257			; *** revise
-	STX def_io			; default local I/O
+	LDX #shell			; get pointer to built-in shell (3)
+	STX ex_pt			; set execution address (5)
+	LDX #DEVICE*257		; *** revise (3)
+	STX def_io			; default local I/O (5)
 	_KERNEL(B_FORK)		; reserve first execution braid, no direct call as could be PATCHED!
 	_KERNEL(B_EXEC)		; go for it! no direct call as could be PATCHED!
 ; singletask systems will not arrive here, ever!
 	_KERNEL(B_YIELD)	; ** get into the working code ASAP! ** no direct call as could be PATCHED!
 here:
-	BRA here			; ...as the scheduler will detour execution
+	BRA here			; ...as the scheduler will detour execution (4)
 
 ; a quick way to print a newline on standard device
 ks_cr:
-	LDAA #CR			; leading newline
+	LDAA #CR			; leading newline (2+4)
 	STAA io_c
-	LDAB #DEVICE
+	LDAB #DEVICE		; standard output *** revise (2)
 	_KERNEL(COUT)		; print it
 	RTS
 
