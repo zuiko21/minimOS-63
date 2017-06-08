@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel
 ; v0.6a5
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170607-1725
+; last modified 20170608-0953
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -30,7 +30,7 @@
 #ifndef	NOHEAD
 	.dsb	$100*((* & $FF) <> 0) - (* & $FF), $FF	; page alignment!!! eeeeek
 kern_head:
-	BRK
+	.asc	0
 	.asc	"m", CPU_TYPE	; executable for testing TBD
 	.asc	"****", 13		; flags TBD
 	.asc	"kernel", 0		; filename
