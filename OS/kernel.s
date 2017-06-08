@@ -35,7 +35,7 @@ kern_head:
 	.asc	"****", 13		; flags TBD
 	.asc	"kernel", 0		; filename
 kern_splash:
-	.asc	"minimOS-63 0.6a3", 0	; version in comment
+	.asc	"minimOS-63 0.6a5", 0	; version in comment
 
 	.dsb	kern_head + $F8 - *, $FF	; padding
 
@@ -301,13 +301,17 @@ dr_eol:
 
 ; ***** 6502 ***************** 6502 ***************** 6502 *****
 dr_iqloop:
-;			ASL dr_aut			; extract MSB (will be A_POLL first, then A_REQ)
-;			BCC dr_noten		; skip installation if task not enabled
+			ASL dr_aut			; extract MSB (will be A_POLL first, then A_REQ)
+			BCC dr_noten		; skip installation if task not enabled
 ; prepare another entry into queue
 ;				LDY queues_mx, X	; get index of free entry!
 ;				STY dq_off			; worth saving on a local variable
+				LDAA queues_mx
+				STAA dq_off
 ;				INC queues_mx, X	; add another task in queue
 ;				INC queues_mx, X	; pointer takes two bytes
+				ADDA #2
+				STAA queues_mx
 ; install entry into queue
 ;				JSR dr_itask		; install into queue
 ; save for frequency queue, flags must be enabled for this task!
@@ -489,7 +493,7 @@ k_swi:
 ; in headerless builds, keep at least the splash string
 #ifdef	NOHEAD
 kern_splash:
-	.asc	"minimOS-63 0.6a3", 0
+	.asc	"minimOS-63 0.6a5", 0
 #endif
 
 kern_end:		; for size computation
