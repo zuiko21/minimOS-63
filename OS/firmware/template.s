@@ -2,7 +2,7 @@
 ; sort-of generic template
 ; v0.6a5
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170607-1109
+; last modified 20170609-1328
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -134,6 +134,7 @@ nmi:
 	PSHA
 ; prepare for next routine
 	LDX fw_nmi			; get vector to supplied routine
+#ifdef	SAFE
 ; check whether user NMI pointer is valid
 ; as the magic string will NOT be "executed", can remain the same as 6502
 	LDAA 0, X			; get first char
@@ -148,6 +149,7 @@ nmi:
 	LDAA 3, X			; get fourth char
 	CMPA #'*'			; matches magic string?
 		BNE rst_nmi			; error, use standard handler
+#endif
 	JSR 4, X			; routine OK, skip magic string!
 ; *** here goes the former nmi_end routine ***
 nmi_end:
