@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel
 ; v0.6a5
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170608-1433
+; last modified 20170609-0910
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -253,7 +253,7 @@ dr_empty:
 			BSR dr_inptr		; locate entry for input according to ID! X points to entry (8+34)
 			BSR dr_setpt		; using B, copy dr_iopt into (X) (8+29)
 dr_seto:
-;		ASL dr_aut			; look for COUT (5)
+;		ASLA				; look for COUT, A was respected (2)
 ;		BCC dr_nout			; no output for this! (4)
 			LDX D_COUT, X		; get output routine address, this X=6502 sysptr (6)
 			STX dr_iopt			; *** new temporary, will hold address to write into entry (5)
