@@ -2,23 +2,23 @@
 ; sort-of-template, possibly KERAton inspired
 ; copy or link as options.h in root dir
 ; (c) 2015-2017 Carlos J. Santisteban
-; last modified 20170612-1407
+; last modified 20170613-1059
 
 ; *** set conditional assembly ***
 
 ; comment for optimized code without optional checks
-#define		SAFE	_SAFE
-#define		LOWRAM	_LOWRAM
+#define		SAFE			_SAFE
+#define		LOWRAM			_LOWRAM
 
 ; *** machine specific info ***
 ; select type as on executable headers
-#define		CPU_TYPE	'M'
+#define		CPU_TYPE		'M'
 
 ; *** machine hardware definitions ***
 ; Machine-specific ID strings, new 20150122, renamed 20150128, 20160120, 20160308
 
 #define		MACHINE_NAME	"KERAton"
-#define		MACHINE_ID	"keraton"
+#define		MACHINE_ID		"keraton"
 
 ; Firmware selection, new 20160310, will pick up suitable template from firmware/
 #define		ARCH			keraton
@@ -42,43 +42,48 @@ FW_BASE		=	$E000	; standard value
 
 ; ** I/O definitions **
 
-; I/O base address, usually one page, new 20160308
-IO_BASE	=	$4000	; possible 16K area
+; I/O base address, usually one page
+IO_BASE	=	$7F00	; possible 16K area is $4000-$7FFF
 
 ; generic address declaration
-PIA	=	IO_BASE	; TBD*****
+PIA		=	IO_BASE + $C0	; Use A4-5 on CS0-1, ¬IO.¬Y3 as ¬CS2
 
-; * optional ACIA/UART address (in external board!) *
-ACIA1	=	IO_BASE + $D0	; ACIA address on most (no longer $DFE0 for easier decoding 688+138)
-ACIA	=	ACIA1			; for increased compatibility
+; * KERAton 2651 ACIA address *
+ACIA	=	IO_BASE + $B0	; ACIA address ($80-$BF) from ¬IO.¬Y2
+
+; with above devices, $00-$7F and $D0-$FF are free IO
 
 ; *** set standard device *** new 20160331 
-DEVICE	=	DEV_LED		; standard I/O device
+DEVICE	=	DEV_LED		; standard I/O device ***TBD
+
 
 ; *** memory size ***
-; * some pointers and addresses * renamed 20150220
+; * some pointers and addresses *
 
 ; SRAM pages, just in case of mirroring/bus error * NOT YET USED
-; 128 pages (32 kiB) is the new generic case, no longer the highest page number!
-SRAM =	0
+SRAM 	=	0			; means 128-byte system!
 
-SPTR		=	$FF		; 
-**************general case stack pointer, new 
-name 20160308
-SYSRAM		=	$0200	; generic case system RAM after zeropage and stack, most systems with at least 1 kiB RAM
-ZP_AVAIL	=	$E1		; as long as locals start at $E4, not counting used_zp
+; initial stack pointer
+SPTR	=	$BB		; KERAton and other 128-byte RAM systems!
+
+; system RAM location, where firmware and system variables start
+SYSRAM	=	$80		; for 128-byte systems
+
+; user-zp available space
+; 128-byte 6800 systems leave 35(+1+2) bytes for user ($BC-$DE) assuming 60-byte stack AND sysvars space ($80-$BB)
+; without multitasking, $DF (z_used) COULD be free, and so are $FE-FF (sys_sp)
+ZP_AVAIL	=	$23
 
 
 ; *** speed definitions ***
-
 ; ** master Phi-2 clock speed, used to compute remaining values! **
-PHI2	=	921000		; clock speed in Hz
+PHI2	=	921600		; clock speed in Hz
 
 ; ** jiffy interrupt frequency **
 IRQ_FREQ =	150			; general case
 ; T1_DIV no longer specified, should be computed elsewhere
 ; could be PHI2/IRQ_FREQ-2
 
-; speed code in fixed-point format, new 20150129
-SPEED_CODE =	$0F		;.921 MHz system
+; speed code in fixed-point format
+SPEED_CODE =	$0F		; 921.6 kHz system
 ; could be computed as PHI2*16/1000000
