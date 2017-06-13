@@ -1,7 +1,8 @@
-; minimOS-63 generic Kernel
+; minimOS·63 generic Kernel
 ; v0.6a5
+; MASM compliant 20170613
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170609-0910
+; last modified 20170613-1234
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -17,7 +18,7 @@
 #ifndef	HEADERS
 #include "usual.h"
 #ifdef		DOWNLOAD
-* = $0400				; safe address for patchable 2 kiB systems, change if required
+	ORG		$0400			; safe address for patchable 2 kiB systems, change if required
 #else
 ; standalone kernels need to keep track of drivers_ad label!
 .data
@@ -28,23 +29,28 @@
 
 ; *** standard header, at least for testing ***
 #ifndef	NOHEAD
-	.dsb	$100*((* & $FF) <> 0) - (* & $FF), $FF	; page alignment!!! eeeeek
+	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)	; page alignment!!! eeeeek
 kern_head:
-	.asc	0
-	.asc	"m", CPU_TYPE	; executable for testing TBD
-	.asc	"****", 13		; flags TBD
-	.asc	"kernel", 0		; filename
+	FCB		0
+	FCB		'm'
+	FCB		CPU_TYPE		; executable for testing TBD
+	FCC		"****"			; flags TBD
+	FCB		CR
+	FCC		"kernel"		; filename
+	FCB		0
 kern_splash:
-	.asc	"minimOS-63 0.6a5", 0	; version in comment
+	FCC		"minimOS·63 0.6a5"	; version in comment
+	FCB		0
 
-	.dsb	kern_head + $F8 - *, $FF	; padding
+	FILL	$FF, kern_head + $F8 - *	; padding
 
-	.word	$5280	; time, 10.20
-	.word	$4AC6	; date, 2017/6/6
+	FDB		$63C0			; time, 12.30
+	FDB		$4ACD			; date, 2017/6/13
 
-kern_siz = kern_end - kern_head - $FF
+kern_siz	EQU kern_end - kern_head - $FF
 
-	.word	kern_siz, 0	; kernel size excluding header
+	FDB		kern_siz		; kernel size excluding header 
+	FDB		0
 #endif
 
 ; **************************************************
@@ -112,7 +118,8 @@ ram_init:
 ; ------
 #else
 ; ++++++ new direct I/O tables for much faster access 20160406 ++++++
-	STAB run_pid			; new 170222, set default running PID *** this must be done BEFORE initing drivers as multitasking should place appropriate temporary value via SET_CURR! (5)
+	STAB run_pid			; new 170222, set default running PID
+; this must be done BEFORE initing drivers as multitasking should place appropriate temporary value via SET_CURR! (5)
 	LDAA #>dr_error		; make unused entries point to a standard error routine (2)
 	LDAB #<dr_error		; the LSB too (2)
 ; *** reset all tables ***
@@ -138,20 +145,20 @@ dr_lclear:
 
 ; *** 2) prepare access to each driver header ***
 ; first get the pointer to each driver table
-drv_aix = systmp		; temporary pointer, *** might go into locals ***
+drv_aix	EQU		systmp	; temporary pointer, *** might go into locals ***
 
 	LDX #drivers_ad		; driver table in ROM (3)
 dr_loop:
 		STX drv_aix			; reset index (5)
-		LDX 0, X			; get current pointer (6)
+		LDX 0,X				; get current pointer (6)
 		BNE dr_inst			; cannot be zero, in case is too far for BEQ dr_ok (4)
 			JMP dr_ok			; all done otherwise (3)
 
 ; *********************************************************
-; *** subroutine for putting A as MSB and B as LSB, X+2 *** (25)
+; *** subroutine for putting A as MSB and B as LSB,X+2 *** (25)
 dr_clrio:
-	STAA 0, X			; set MSB for output (6)
-	STAB 1, X			; and LSB (6)
+	STAA 0,X			; set MSB for output (6)
+	STAB 1,X			; and LSB (6)
 	INX					; next word (4+4+5)
 	INX
 	RTS
@@ -161,14 +168,14 @@ dr_clrio:
 dr_inst:
 		STX da_ptr			; store pointer to header (5) *** but check new variable conflicts! ***
 ; create entry on IDs table
-		LDAA D_ID, X		; get ID code (5)
+		LDAA D_ID,X		; get ID code (5)
 		STAA dr_id			; keep in local variable as will be often used (4)
 #ifdef	SAFE
 		BMI dr_phys			; only physical devices (4)
 			JMP dr_abort		; reject logical devices (3)
 dr_phys:
 #endif
-		LDAA D_AUTH, X		; get provided features (5)
+		LDAA D_AUTH,X		; get provided features (5)
 		STAA dr_feat		; another commonly used value (will stay during check) (4)
 
 ; *** 3) before registering, check whether the driver COULD be successfully installed ***
@@ -191,7 +198,7 @@ dr_nptsk:
 dr_nrtsk:
 ; if arrived here, there is room for interrupt tasks, but check init code
 ;		STAA dr_aut			; *** will save it here for later... (4)
-		JSR D_INIT, X		; like dr_icall, call D_INIT routine! (8...)
+		JSR D_INIT,X		; like dr_icall, call D_INIT routine! (8...)
 			BCS dr_nabort		; no way, forget about this (4)
 ; *** 4) driver should be OK to install, just check whether this ID was not in use ***
 
@@ -210,9 +217,9 @@ dr_nrtsk:
 ; uses acc B and restores X as da_ptr
 dr_setpt:
 	LDAB dr_iopt		; get MSB (3)
-	STAB 0, X			; write it! (6)
+	STAB 0,X			; write it! (6)
 	LDAB dr_iopt+1		; LSB too (3+6)
-	STAB 1, X
+	STAB 1,X
 	LDX da_ptr			; restore header pointer (4+5)
 	RTS
 
@@ -248,14 +255,14 @@ dr_empty:
 ;		LDAA dr_aut			; *** continue with bit shifting! (3)
 ;		ASLA				; look for CIN (2)
 ;		BCC dr_seto			; no input for this! (4)
-			LDX D_CIN, X		; get input routine address, this X=6502 sysptr (6)
+			LDX D_CIN,X		; get input routine address, this X=6502 sysptr (6)
 			STX dr_iopt			; *** new temporary, will hold address to write into entry (5)
 			BSR dr_inptr		; locate entry for input according to ID! X points to entry (8+34)
 			BSR dr_setpt		; using B, copy dr_iopt into (X) (8+29)
 dr_seto:
 ;		ASLA				; look for COUT, A was respected (2)
 ;		BCC dr_nout			; no output for this! (4)
-			LDX D_COUT, X		; get output routine address, this X=6502 sysptr (6)
+			LDX D_COUT,X		; get output routine address, this X=6502 sysptr (6)
 			STX dr_iopt			; *** new temporary, will hold address to write into entry (5)
 			BSR dr_outptr		; locate entry for output according to ID! X points to entry (8+28)
 			BSR dr_setpt		; using B, copy dr_iopt into (X) (8+29)
@@ -270,7 +277,7 @@ dr_nout:
 		BEQ dr_eol			; already at end of list (4)
 dr_scan:
 #ifdef	SAFE
-			CMPA 0, X			; compare with list entry (5)
+			CMPA 0,X			; compare with list entry (5)
 				BEQ dr_abort		; already in use, don't register (4)
 #endif
 			INX					; otherwise try next one (4)
@@ -278,7 +285,7 @@ dr_scan:
 			BNE dr_scan
 dr_eol:
 ; supposedly no conflicting IDs found, or at least pointer set after last one
-		STAA 0, X			; store in list, now in RAM (6)
+		STAA 0,X			; store in list, now in RAM (6)
 ; ------
 #endif
 
@@ -292,7 +299,7 @@ dr_eol:
 		BCC dr_notpq		; skip installation if task not enabled (4)
 ; time to get a pointer to the-block-of-pointers (source)
 			LDX da_ptr			; work with current header (4)
-			LDX D_POLL, X		; get this pointer (6)
+			LDX D_POLL,X		; get this pointer (6)
 			STX sysptr			; store it ***** check! (5)
 ; prepare another entry into queue
 			LDAA queues_mx+1	; get index of free P-entry! (4)
@@ -320,7 +327,7 @@ dr_eol:
 ; pointer to enable-array is ready, fill it!
 			LDX dte_ptr			; MCU could waive this* (4)
 			LDAB dr_id			; use ID as enabling value, as has bit 7 high (3)
-			STAB 0, X			; enabled! (6)
+			STAB 0,X			; enabled! (6)
 ; an entry is being inserted, thus update counter
 			ADDA #2				; another entry added (A had original count) (2)
 			STAA queues_mx+1	; update P-counter (5)
@@ -335,7 +342,7 @@ dr_notpq:
 		BCC dr_notrq		; skip installation if task not enabled (4)
 ; worth advancing just the header pointer
 			LDX da_ptr			; work with current header (4)
-			LDX D_REQ, X		; get this pointer (6)
+			LDX D_REQ,X		; get this pointer (6)
 			STX sysptr			; store it ***** check! (5)
 ; prepare another entry into queue
 			LDAA queues_mx		; get index of free R-entry! (4)
@@ -363,7 +370,7 @@ dr_notpq:
 ; pointer to enable-array is ready, fill it!
 			LDX dte_ptr			; MCU could waive this* (4)
 			LDAB dr_id			; use ID as enabling value, as has bit 7 high (3)
-			STAB 0, X			; enabled! (6)
+			STAB 0,X			; enabled! (6)
 ; an entry is being inserted, thus update counter
 			ADDA #2				; another entry added (A had original count) (2)
 			STAA queues_mx		; update R-counter (5)
@@ -385,7 +392,7 @@ dr_ablst:
 				DECB				; one less (2)
 				BNE dr_ablst		; acc B will never start at 0! (4)
 			LDAB #DEV_NULL		; invalid proper value... (2)
-			STAB 0, X			; ...as unreachable entry (6)
+			STAB 0,X			; ...as unreachable entry (6)
 ; ------
 #endif
 dr_next:
@@ -418,14 +425,14 @@ dr_itask:
 ; likely to get inline for MCUs
 ; read address from header and update it!
 	LDX sysptr			; get set pointer (4)
-;	LDD 0, X			; MCUs get the whole word! (5)
-	LDAA 0, X			; indirect read MSB (5)
-	LDAB 1, X			; and LSB (5)
+;	LDD 0,X			; MCUs get the whole word! (5)
+	LDAA 0,X			; indirect read MSB (5)
+	LDAB 1,X			; and LSB (5)
 ; write pointer into queue
 	LDX dq_ptr			; switch pointer (4)
-;	STD 0, X			; MCUs store whole word! (5)
-	STAA 0, X			; store fetched task pointer (6)
-	STAB 1, X			; LSB too (6+5)
+;	STD 0,X			; MCUs store whole word! (5)
+	STAA 0,X			; store fetched task pointer (6)
+	STAB 1,X			; LSB too (6+5)
 	RTS
 
 ; * routine for advancing to next queue *
@@ -507,7 +514,7 @@ ks_cr:
 ; *** generic kernel routines, separate files ***
 ; ***********************************************
 #ifndef		LOWRAM
-	.asc	"<API>"		; debug only
+	FCC		"<API>"		; debug only
 #include "api.s"
 #else
 #include "api_lowram.s"
@@ -528,7 +535,8 @@ k_swi:
 ; in headerless builds, keep at least the splash string
 #ifdef	NOHEAD
 kern_splash:
-	.asc	"minimOS-63 0.6a5", 0
+	FCC		"minimOS·63 0.6a5"
+	FCB		0
 #endif
 
 kern_end:		; for size computation
@@ -548,8 +556,8 @@ kern_end:		; for size computation
 #ifdef	NOHEAD
 shell:					; no header to skip
 #else
-	.dsb	$100*((* & $FF) <> 0) - (* & $FF), $FF	; page alignment!!! eeeeek
-shell	= * + 256		; skip header
+	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)	; page alignment!!! eeeeek
+shell	EQU	* + 256		; skip header
 #endif
 
 #include "shell/SHELL"
@@ -567,5 +575,5 @@ sysvars:
 dr_vars:
 #include "drivers/config/DRIVER_PACK.h"
 .text					; eeeeeek
--user_sram = *			; the rest of available SRAM
+-user_sram	EQU	*			; the rest of available SRAM
 #endif
