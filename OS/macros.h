@@ -1,6 +1,6 @@
 ; minimOS·63 0.6a3 MACRO definitions
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170614-0901
+; last modified 20170614-1251
 ; adapted to MASM 20170614
 
 ; **************************
@@ -18,8 +18,8 @@ lock		EQU	$FFE0	; just after the above
 ; *****************************
 
 ; system calling interface ***
-#define		_KERNEL(a)		LDX kern_ptr: JSR a, X
-#define		_ADMIN(a)		LDX #admin_ptr: JSR a, X
+#define		_KERNEL(a)		LDX kern_ptr: JSR a,X
+#define		_ADMIN(a)		LDX #admin_ptr: JSR a,X
 ; Kernel/firmware function numbers are multiples of 3!!! Each entry is JMP ext
 ; besides zpar* parameters, accumulator B is used (like Y on 6502)
 
@@ -67,7 +67,8 @@ FILE_DEV	EQU	130		; *** this will be sticked somewhere as no patchable API entri
 #define		CR		13
 #define		LF		10
 #define		BS		8
-#define		TAB		9
+; TAB confused with a 6800 mnemonic!!!
+#define		TABU	9
 #define		BEL		7
 #define		ESC		27
 

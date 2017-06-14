@@ -1,6 +1,6 @@
 ; minimOS·63 0.6a1 System Variables
 ; (c) 2012-2017 Carlos J. Santisteban
-; last modified 20170614-1210
+; last modified 20170614-1235
 
 ; **** I/O management ****
 ; ** pointer tables for drivers, new order suggested for alternative version **
@@ -18,7 +18,7 @@ drivers_id	RMB MAX_DRIVERS			; space for reasonable number of drivers
 cio_lock	RMB 256				; PID-reserved MUTEX for CIN & COUT, per-phys-driver & interleaved with CIN binary mode flag for event management 170220
 cin_mode	EQU cio_lock + 1		; interleaved
 #else
-cin_mode	.dsb	1			; only this for low ram systems
+cin_mode	RMB	1				; only this for low ram systems
 #endif
 
 ; **** interrupt queues **** new format 20170518

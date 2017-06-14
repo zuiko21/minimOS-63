@@ -1,7 +1,7 @@
 ; minimOS·63 0.6a2 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170614-0902
+; last modified 20170614-1229
 ; MASM compliant 20170614
 
 ; *************************************************
@@ -148,13 +148,13 @@ LOCK_RAM	EQU	6	; new label 20161117
 
 ; some kernel-related definitions
 #ifndef	LOWRAM
-			MAX_QUEUE	EQU	16	; maximum interrupt task queue size
-			MAX_DRIVERS	EQU	16	; maximum number of drivers, independent as of 20170207
-			MAX_LIST	EQU	32	; number of available RAM blocks *** might increase this value in 65816 systems!
+MAX_QUEUE	EQU	16	; maximum interrupt task queue size
+MAX_DRIVERS	EQU	16	; maximum number of drivers, independent as of 20170207
+MAX_LIST	EQU	32	; number of available RAM blocks *** might increase this value in 65816 systems!
 #else
-			MAX_QUEUE	EQU	6	; much smaller queues in 128-byte systems, note unified jiffy & slow queues!
-			MAX_DRIVERS	EQU	4	; maximum number of drivers, independent as of 20170207
-			MAX_LIST	EQU	0	; no memory management for such systems
+MAX_QUEUE	EQU	6	; much smaller queues in 128-byte systems, note unified jiffy & slow queues!
+MAX_DRIVERS	EQU	4	; maximum number of drivers, independent as of 20170207
+MAX_LIST	EQU	0	; no memory management for such systems
 #endif
 
 ; multitasking subfunctions, no longer needed as will patch regular kernel!

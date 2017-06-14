@@ -1,6 +1,6 @@
 ; minimOS-63 zeropage
 ; v0.6a5
-; last modified 20170614-1022
+; last modified 20170614-1234
 ; MASM compliant 20170614
 
 	ORG		0
@@ -68,24 +68,35 @@ stdout		RMB 1			; $E3
 locals:						; old label for compatibility
 
 ; *** include aliases here for local1/locpt1 ***
-dr_aut: ma_ix: mm_sig: iol_dev:
-local1: locpt1		RMB 4	; variables for kernel functions @ $E4
+dr_aut:
+ma_ix:
+mm_sig:
+iol_dev:
+local1:
+locpt1		RMB 4	; variables for kernel functions @ $E4
 
 dq_off		EQU dr_aut+1
 dq_ptr		EQU dr_aut+2
 
 ; *** include aliases here for local2/locpt2 ***
-da_ptr: exec_p: ma_lim:
-local2: locpt2		RMB 4	; variables for kernel functions @ $E8
+da_ptr:
+exec_p:
+ma_lim:
+local2:
+locpt2		RMB 4	; variables for kernel functions @ $E8
 
 dr_id		EQU da_ptr+2
 dr_feat		EQU da_ptr+3
 rl_dev		EQU dr_id
 
 ; *** include aliases here for local3/locpt3 ***
-dte_ptr: exe_sp: rh_scan:
-rl_cur: ex_wr:
-local3: locpt3		RMB 4	; variables for kernel functions @ $EC
+dte_ptr:
+exe_sp:
+rh_scan:
+rl_cur:
+ex_wr:
+local3:
+locpt3		RMB 4	; variables for kernel functions @ $EC
 
 loc_str		EQU rh_scan+2	; temporary string pointer
 
@@ -94,24 +105,35 @@ loc_str		EQU rh_scan+2	; temporary string pointer
 ; ***********************
 
 ; *** include aliases here for zpar3/zaddr3 ***
-b_sig: kerntab: ln_siz:
-ex_pt: ma_rs:				; mandatory 24-bit size
-
-zpar3: zaddr3		RMB 4	; ** up to 4 bytes, including older names @ $F0 **
+b_sig:
+kerntab:
+ln_siz:
+ex_pt:
+ma_rs:
+zpar3:
+zaddr3		RMB 4	; ** up to 4 bytes, including older names @ $F0 **
 
 k_ram		EQU ma_rs+2		; Kernel RAM pages (0 for 128-byte system)
 
 ; *** include aliases here for zpar2/zaddr2 ***
-up_ticks: def_io: irq_hz
-ma_pt: str_pt:
+up_ticks:
+def_io:
+irq_hz
+ma_pt:
+str_pt:
 
-zpar2: zaddr2		RMB 4	; ** up to 4 bytes, including older names @ $F4 **
+zpar2:
+zaddr2		RMB 4	; ** up to 4 bytes, including older names @ $F4 **
 
 ; *** include aliases here for zpar/zaddr ***
-io_c: ma_align: cpu_ll:
-up_sec: w_rect:				; 32-bit
+io_c:
+ma_align:
+cpu_ll:
+up_sec:
+w_rect:				; 32-bit
 
-zpar: zaddr			RMB 4	; ** up to 4 bytes, including older names @ $F8 **
+zpar:
+zaddr			RMB 4	; ** up to 4 bytes, including older names @ $F8 **
 
 c_speed		EQU cpu_ll+1
 
@@ -119,9 +141,9 @@ c_speed		EQU cpu_ll+1
 ; ** kernel call interface **
 ; ***************************
 
-	ORG		$FC				; should be there already
+	ORG		kern_ptr		; should be there already
 
-kern_ptr	RMB 2			; $FC, will point to supplied JUMP table
+	RMB 2			; $FC, will point to supplied JUMP table
 
 ; ** temporary SP storage, it is FREE for singletask systems, or valid within disabled interrupts **
 

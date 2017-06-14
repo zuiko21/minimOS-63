@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel API for LOWRAM systems
 ; v0.6a4
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170614-0928
+; last modified 20170614-1252
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -415,7 +415,7 @@ ll_found:
 		BNE ll_wrap		; error otherwise (4)
 	LDAA 2,X			; next byte is CPU type (5)
 ; check compability of supplied code against present CPU
-	ADMIN(GESTALT)		; fetch system info (3+8+43)
+	_ADMIN(GESTALT)		; fetch system info (3+8+43)
 	LDAB cpu_ll			; the parameter we are looking for, was fw_cpu (3)
 	CMPB #'H'			; is it a 68HC11 MCU? (2)
 		BEQ ll_hc11			; all Motorola is OK, but not Hitachi! (4)
@@ -599,7 +599,6 @@ shutdown:
 	CMPB #PW_CLEAN		; from end of main task (2)
 		BEQ sd_2nd			; continue with second stage (4)
 	STAB sd_flag		; store mode for later, first must do proper (4)
-system shutdown, note long addressing
 ; ask THE braid to terminate
 	CLRB				; PID=0 means ALL braids (2)
 	LDAA #SIGTERM		; will be asked to terminate (2)
