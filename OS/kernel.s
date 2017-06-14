@@ -2,7 +2,7 @@
 ; v0.6a6
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170614-1358
+; last modified 20170614-1427
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -21,15 +21,17 @@
 	ORG		$0400			; safe address for patchable 2 kiB systems, change if required
 #else
 ; standalone kernels need to keep track of drivers_ad label!
-.data
 #include DRIVER_PACK_s
-.text
+	ORG		ROM_BASE
 #endif
 #endif
 
 ; *** standard header, at least for testing ***
 #ifndef	NOHEAD
-	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)	; page alignment!!! eeeeek
+;	FILL	$FF, $100*((* & $FF) != 0) - (* & $FF)	; page alignment!!! eeeeek
+; standard page alignment for CPP-MASM
+	ORG		(* & $FF) + $100*((* & $FF) <> 0)
+
 kern_head:
 	FCB		0
 	FCB		'm'

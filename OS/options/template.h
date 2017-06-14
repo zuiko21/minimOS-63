@@ -9,6 +9,7 @@
 ; comment for optimized code without optional checks
 #define		SAFE			_SAFE
 #define		LOWRAM			_LOWRAM
+;#define		NOHEAD
 
 ; *** machine specific info ***
 ; select type as on executable headers
