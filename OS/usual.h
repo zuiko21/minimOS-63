@@ -1,5 +1,5 @@
 ; usual header includes for minimOS-63
-; last modified 20170612-1400
+; last modified 20170614-1154
 ; (c) 2012-2017 Carlos J. Santisteban
 
 #ifndef	HEADERS
@@ -9,25 +9,22 @@
 #include "options.h"
 #include "macros.h"
 #include "abi.h"
-.zero
 #include "zeropage.h"
-.bss
-* = SYSRAM				; as defined in options.h
+	ORG		SYSRAM				; as defined in options.h
 ; firmware and system variables
-#include "firmware/ARCH.h"
+#include ARCH_h
 #ifndef	DOWNLOAD
 sysvars:
 #include "sysvars.h"
 ; driver-specific system variables, located here 20170207
 dr_vars:
-#include "drivers/config/DRIVER_PACK.h"
+#include DRIVER_PACK_h
 #endif
 ; points to the beginning of free SRAM
--user_sram:
-.text
+user_sram:
 #ifndef	ROM
 ; placeholder for standalone assembly
-*		= ROM_BASE
--kernel	= *
+	ORG		ROM_BASE
+kernel:
 #endif
 #endif

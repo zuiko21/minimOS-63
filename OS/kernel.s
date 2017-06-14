@@ -2,7 +2,7 @@
 ; v0.6a6
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170614-1059
+; last modified 20170614-1219
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -22,7 +22,7 @@
 #else
 ; standalone kernels need to keep track of drivers_ad label!
 .data
-#include "drivers/config/DRIVER_PACK.s"
+#include DRIVER_PACK_s
 .text
 #endif
 #endif
@@ -614,20 +614,19 @@ shell:					; no header to skip
 shell		EQU	* + 256		; skip header
 #endif
 
-#include "shell/SHELL"
+#include SHELL
 
 ; ************************************************************
 ; ****** Downloaded kernels add driver staff at the end ******
 ; ************************************************************
 #ifdef	DOWNLOAD
-#include "drivers/config/DRIVER_PACK.s"	; this package will be included with downloadable kernels
-.data
+; this package will be included with downloadable kernels
+#include	DRIVER_PACK_s
 ; downloadable system have ALL system & driver variables AFTER the kernel/API
 sysvars:
 #include "sysvars.h"
 ; driver-specific system variables, located here 20170207
 dr_vars:
 #include "drivers/config/DRIVER_PACK.h"
-.text					; eeeeeek
--user_sram	EQU	*			; the rest of available SRAM
+user_sram:				; the rest of available SRAM
 #endif

@@ -2,7 +2,7 @@
 ; sort-of-template, possibly KERAton inspired
 ; copy or link as options.h in root dir
 ; (c) 2015-2017 Carlos J. Santisteban
-; last modified 20170613-1059
+; last modified 20170614-1201
 
 ; *** set conditional assembly ***
 
@@ -20,16 +20,20 @@
 #define		MACHINE_NAME	"KERAton"
 #define		MACHINE_ID		"keraton"
 
-; Firmware selection, new 20160310, will pick up suitable template from firmware/
-#define		ARCH			keraton
+; Firmware selection, new 20160310, will pick up suitable template from OS/
+; separate header and source paths as CPP seems to have trouble...
+#define		ARCH_h			"firmware/template.h"
+#define		ARCH_s			"firmware/template.s"
 
-; Suitable driver package (add .h or .s as needed) in drivers/config/ folder, new 20160308
+; Suitable driver package (add .h or .s as needed) from OS/ folder
 ; may suit different configurations on a machine
-#define		DRIVER_PACK		keraton_std
+; separate header and source paths as CPP seems to have trouble...
+#define		DRIVER_PACK_h		"drivers/config/keraton_std.h"
+#define		DRIVER_PACK_s		"drivers/config/keraton_std.s"
 
 ; *** Default files ***
-; default shell from folder
-#define		SHELL		monitor.s
+; default shell from ANY folder
+#define		SHELL		"shell/monitor.s"
 
 ; default NMI, BRK etc TBD ***********
 
