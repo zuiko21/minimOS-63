@@ -2,7 +2,8 @@
 ; sort-of generic template
 ; v0.6a5
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170609-1328
+; last modified 20170614-1109
+; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -12,27 +13,33 @@
 ; *** first some ROM identification ***
 ; this is expected to be loaded at an aligned address anyway
 #ifndef	NOHEAD
+	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)	; page alignment!!! eeeeek
 fw_start:
-	.asc	0, "m", CPU_TYPE	; special system wrapper
-	.asc	"****", CR			; flags TBD
-	.asc	"boot", 0			; mandatory filename for firmware
+	FCB		0
+	FCB		'm'
+	FCB		CPU_TYPE			; executable for testing TBD
+	FCC		"****"				; flags TBD
+	FCB		CR
+	FCC		"boot"				; mandatory filename for firmware
+	FCB		0
 fw_splash:
-	.asc	"0.6 firmware for "
+	FCC		"0.6 firmware for "	; version in comment
 fw_mname:
-	.asc	MACHINE_NAME, 0
+	FCC		MACHINE_NAME
+	FCB		0
 
 ; advance to end of header
-	.dsb	fw_start + $F8 - *, $FF	; for ready-to-blow ROM, advance to time/date field
+	FILL	$FF, fw_start + $F8 - *	; padding
 
 ; *** date & time in MS-DOS format at byte 248 ($F8) ***
-	.word	$A000				; time, 20.00
-	.word	$4AC5				; date, 2017/6/1
+	FDB		$5800				; time, 11.00
+	FDB		$4ACE				; date, 2017/6/14
 
-fwSize	=	$10000 - fw_start - 256	; compute size NOT including header!
+fwSize		EQU $10000 - fw_start - $FF
 
 ; filesize in top 32 bits NOT including header, new 20161216
-	.word	fwSize				; filesize
-	.word	0					; 64K space does not use upper 16-bit
+	FDB		fwSize				; firmware size excluding header 
+	FDB		0					; 64K space does not use upper 16-bit
 ; *** end of standard header ***
 #endif
 
@@ -81,7 +88,7 @@ post:
 ; *** reset jiffy count ***
 	LDX #ticks			; first address in uptime seconds AND ticks, assume contiguous
 res_sec:
-		CLR 0, X			; reset byte
+		CLR 0,X				; reset byte
 		INX					; next
 		CPX #ticks+5		; first invalid address
 		BNE res_sec			; continue until reached
@@ -98,7 +105,7 @@ res_sec:
 ; **********************************
 	LDX #fw_splash		; reset index
 fws_loop:
-		LDAA 0, X			; get char
+		LDAA 0,X			; get char
 			BEQ fws_cr			; no more to print
 		STAA $0F			; visual 6800 output
 		INX					; next char
@@ -114,7 +121,7 @@ fws_cr:
 ; ************************
 start_kernel:
 	LDX fw_warm			; get pointer
-	JMP 0, X			; jump there!
+	JMP 0,X				; jump there!
 
 ; ********************************
 ; ********************************
@@ -127,7 +134,7 @@ start_kernel:
 ; **********************************************
 nmi:
 ; registers are saved! but check system pointers
-; make NMI reentrant
+; make NMI reentrant *** could use some 6801 optimisation
 	LDAA systmp			; get original word
 	LDAB systmp+1
 	PSHB				; store them in similar order
@@ -137,20 +144,20 @@ nmi:
 #ifdef	SAFE
 ; check whether user NMI pointer is valid
 ; as the magic string will NOT be "executed", can remain the same as 6502
-	LDAA 0, X			; get first char
+	LDAA 0,X			; get first char
 	CMPA #'U'			; matches magic string?
 		BNE rst_nmi			; error, use standard handler
-	LDAA 1, X			; get second char
+	LDAA 1,X			; get second char
 	CMPA #'N'			; matches magic string?
 		BNE rst_nmi			; error, use standard handler
-	LDAA 2, X			; get third char
+	LDAA 2,X			; get third char
 	CMPA #'j'			; matches magic string?
 		BNE rst_nmi			; error, use standard handler
-	LDAA 3, X			; get fourth char
+	LDAA 3,X			; get fourth char
 	CMPA #'*'			; matches magic string?
 		BNE rst_nmi			; error, use standard handler
 #endif
-	JSR 4, X			; routine OK, skip magic string!
+	JSR 4,X				; routine OK, skip magic string!
 ; *** here goes the former nmi_end routine ***
 nmi_end:
 	PULA				; retrieve saved vars
@@ -221,16 +228,16 @@ fw_s_isr:
 fw_s_nmi:
 	LDX kerntab			; get pointer to supplied code + magic string
 #ifdef	SAFE
-	LDAA 0, X			; first char
+	LDAA 0,X			; first char
 	CMPA #'U'			; is it correct?
 		BNE fsn_err			; not!
-	LDAA 1, X			; second char
+	LDAA 1,X			; second char
 	CMPA #'N'			; correct?
 		BNE fsn_err			; not!
-	LDAA 2, X			; third char
+	LDAA 2,X			; third char
 	CMPA #'j'			; correct?
 		BNE fsn_err			; not!
-	LDAA 3, X			; last char
+	LDAA 3,X			; last char
 	CMPA #'*'			; correct?
 	BEQ fsn_valid		; yeah, proceed!
 fsn_err:
@@ -298,7 +305,7 @@ fwp_ns:
 	CMPB #PW_WARM		; warm?
 	BNE fwp_nw			; not
 		LDX fw_warm			; or get kernel start vector
-		JMP 0, X			; warm boot!
+		JMP 0,X				; warm boot!
 fwp_nw:
 	CMPB #PW_COLD		; cold?
 	BNE fwp_nc			; not
@@ -333,11 +340,11 @@ fw_install:
 	STX systmp			; store temporarily (5)
 fwi_loop:
 		LDX kerntab			; set origin pointer (4)
-		LDAA 0, X			; get byte from table as supplied (5)
+		LDAA 0,X			; get byte from table as supplied (5)
 		INX					; increment (4)
 		STX kerntab			; ...and update (5)
 		LDX systmp			; switch to destination (4)
-		STAA 0, X			; copy the byte (6)
+		STAA 0,X			; copy the byte (6)
 		INX					; increment (4)
 		STX systmp			; ...and update (5)
 		INCB				; advance counter (2)
@@ -363,9 +370,9 @@ fw_patch:
 	STAB systmp			; pointer is ready
 	LDX systmp			; set as index
 	LDAB kerntab		; get function MSB
-	STAB 0, X			; store into firmware
+	STAB 0,X			; store into firmware
 	LDAB kerntab+1		; and LSB
-	STAB 1, X
+	STAB 1,X
 	_EXIT_CS			; restore interrupts
 	_DR_OK				; done
 
@@ -399,21 +406,22 @@ fw_ctx:
 ; if case of no headers, at least keep machine name somewhere
 #ifdef	NOHEAD
 fw_splash:
-	.asc	"0.6 firmware for "
+	FCC		"0.6 firmware for "
 fw_mname:
-	.asc	MACHINE_NAME, 0
+	FCC		MACHINE_NAME
+	FCB 0
 #endif
 
 ; filling for ready-to-blow ROM
 #ifdef		ROM
-	.dsb	admin_ptr-*, $FF
+	FILL	$FF, admin_ptr-*
 #endif
 
 ; *********************************
 ; *** administrative JUMP table ***
 ; *********************************
 
-* = admin_ptr
+	ORG		admin_ptr
 
 ; generic functions, esp. interrupt related
 	JMP fw_gestalt		; GESTALT get system info (renumbered) @0
@@ -439,7 +447,7 @@ fw_mname:
 
 ; filling for ready-to-blow ROM
 #ifdef	ROM
-	.dsb	lock-*, $FF
+	FILL	$FF, lock-*
 #endif
 
 ; *****************************
@@ -457,19 +465,19 @@ panic_loop:
 ; might go elsewhere
 irq:
 	LDX fw_isr			; vectored ISR
-	JMP 0, X			; MUST end in RTI
+	JMP 0,X			; MUST end in RTI
 
 ; *** minimOS SWI handler *** $FFE8
 ; might go elsewhere
 brk_hndl:		; label from vector list
 	LDX fw_brk			; get vectored pointer
-	JMP 0, X			; MUST end in RTI
+	JMP 0,X			; MUST end in RTI
 
 ; $FFED...
 
 ; filling for ready-to-blow ROM
 #ifdef	ROM
-	.dsb	$FFEE-*, $FF
+	FILL	$FF, $FFEE-*
 #endif
 
 ; **********************************
@@ -477,19 +485,22 @@ brk_hndl:		; label from vector list
 ; **********************************
 
 ; *** Hitachi ROM vectors ***
-* = $FFEE				; should be already at it
-	.word	nmi			; TRAP	@ $FFEE
+	ORG		$FFEE		; should be already at it
+
+	FDB		nmi			; TRAP	@ $FFEE
 
 ; *** Microcontroller ROM vectors ***
-* = $FFF0				; should be already at it
-	.word	nmi			; SCI	@ $FFF0
-	.word	nmi			; TOF	@ $FFF2
-	.word	nmi			; OCF	@ $FFF4
-	.word	nmi			; ICF	@ $FFF6
+	ORG		$FFF0		; should be already at it
+
+	FDB		nmi			; SCI	@ $FFF0
+	FDB		nmi			; TOF	@ $FFF2
+	FDB		nmi			; OCF	@ $FFF4
+	FDB		nmi			; ICF	@ $FFF6
 
 ; *** 6800 ROM vectors ***
-* = $FFF8				; just in case
-	.word	irq			; IRQ @ $FFF8
-	.word	brk_hndl	; SWI @ $FFFA
-	.word	nmi			; NMI @ $FFFC
-	.word	reset		; RES @ $FFFE
+	ORG		$FFF8		; just in case
+
+	FDB		irq			; IRQ @ $FFF8
+	FDB		brk_hndl	; SWI @ $FFFA
+	FDB		nmi			; NMI @ $FFFC
+	FDB		reset		; RES @ $FFFE

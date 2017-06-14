@@ -1,16 +1,17 @@
 ; minimOS·63 0.6a3 MACRO definitions
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170607-0910
+; last modified 20170614-0901
+; adapted to MASM 20170614
 
 ; **************************
 ; *** standard addresses ***
 ; **************************
 
-kern_ptr	=	$FC		; pointer to jump table, routines ending in RTS
-admin_ptr	=	$FFC0	; NEW fixed jump table, routines ending in RTS, intended for kernel/drivers ONLY
+kern_ptr	EQU	$FC		; pointer to jump table, routines ending in RTS
+admin_ptr	EQU	$FFC0	; NEW fixed jump table, routines ending in RTS, intended for kernel/drivers ONLY
 
 ; unified address (will lock at $FFE1-2 anyway)
-lock		=	$FFE0	; just after the above
+lock		EQU	$FFE0	; just after the above
 
 ; *****************************
 ; *** common function calls ***
@@ -49,15 +50,15 @@ lock		=	$FFE0	; just after the above
 #define		_EXIT_CS	TAP
 
 ; *** panic call, now using SWI in case of error display *** new SWI handled 20161010
-#define		_PANIC(a)	SWI: .asc a, 0
+#define		_PANIC(a)	SWI: FCC a: FCB 0
 
 ; **************************************************************
 ; *** device numbers for optional pseudo-driver modules, TBD ***
 ; **************************************************************
 
-;TASK_DEV	=	128		; no longer needed, may displace the following
-WIND_DEV	=	129		; new name 20161017, might suffer the same fate!
-FILE_DEV	=	130		; *** this will be sticked somewhere as no patchable API entries for it! Perhaps #128
+;TASK_DEV	EQU	128		; no longer needed, may displace the following
+WIND_DEV	EQU	129		; new name 20161017, might suffer the same fate!
+FILE_DEV	EQU	130		; *** this will be sticked somewhere as no patchable API entries for it! Perhaps #128
 
 ; *****************************
 ; *** usual ASCII constants ***

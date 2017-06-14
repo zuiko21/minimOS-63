@@ -1,7 +1,8 @@
 ; minimOS-63 generic Kernel API for LOWRAM systems
 ; v0.6a4
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170607-1317
+; last modified 20170614-0928
+; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
 unimplemented:		; placeholder here, not currently used
@@ -30,18 +31,20 @@ pqmanage:
 ; ********************************
 ;		INPUT
 ; acc B		= dev
-; io_c	= char
+; io_c		= char
 ;		OUTPUT
-; C = I/O error
+; C 		= I/O error
 ;		USES da_ptr, dr_id, plus whatever the driver takes
 
-cio_of = dr_id			; parameter switching between CIN and COUT, must leave da_ptr clear!
+cio_of		EQU dr_id	; parameter switching between CIN and COUT, must leave da_ptr clear!
 
 cout:
+#ifdef	MC6801
+	LDAA #D_COUT		; offset to be added (2)
+	STAA cio_of			; store safely (4)
+#else
 	CLR cio_of			; zero indicates COUT (6)
-; ** for MCUs, storing D_COUT would be great **
-;	LDAA #D_COUT		; offset to be added (2)
-;	STAA cio_of			; store safely (4)
+#endif
 	TSTB				; for indexed comparisons (2)
 	BNE co_port			; not default (4)
 		LDAB stdout			; default output device (3)
@@ -59,7 +62,7 @@ cio_phys:
 	LDAA drv_num		; number of drivers (3)
 		BEQ cio_nfound		; no drivers at all! (4)
 cio_loop:
-		CMPB 0, X			; get ID from list (5)
+		CMPB 0,X			; get ID from list (5)
 			BEQ cio_dev			; device found! (4)
 		INX					; go for next (4)
 		DECA				; one less to go (2)
@@ -76,20 +79,23 @@ cio_dev:
 	STAB da_ptr			; store pointer to list entry (4+4)
 	STAA da_ptr+1
 	LDX da_ptr			; use as base index (4)
-	LDX 0, X			; now X holds the header address (6)
-; ** here must jump to appropriate driver routine, generic way follows ** 11+2b, 16+4t
+	LDX 0,X				; now X holds the header address (6)
+; here must jump to appropriate driver routine
+#ifdef	MC6801
+;  MCU version
+	LDAB cio_of			; get offset, must hold an appropriate D_x offset (3)
+	ABX					; GREAT, pointer to routine is ready (3)
+	LDX 0,X				; ready to jump there (6)
+#else
+; generic way follows
 	TST cio_of			; input or output? (6)
 	BNE cio_out			; was output (4)
-		LDX D_CIN, X		; otherwise get input routine pointer (6)
-		JMP 0, X			; not worth reusing code (4...)
+		LDX D_CIN,X			; otherwise get input routine pointer (6)
+		JMP 0,X				; not worth reusing code (4...)
 cio_out:
-	LDX D_COUT, X		; faster getting output routine pointer (6)
-cio_jmp:
-;  ** otherwise, MCUs might do ** 5+2b, 12+4t
-;	LDAB cio_of			; get offset, must hold an appropriate D_x offset (3)
-;	ABX					; GREAT, pointer to routine is ready (3)
-;	LDX 0, X			; ready to jump there (6)
-	JMP 0, X			; will return to caller (4...)
+	LDX D_COUT,X		; faster getting output routine pointer (6)
+#endif
+	JMP 0,X				; will return to caller (4...)
 
 ; *****************************
 ; *** CIN,  get a character ***
@@ -173,7 +179,7 @@ ci_rnd:
 ; str_pt	= pointer to title string, NONE yet used
 ;		OUTPUT
 ; acc B	= dev
-; C	= not supported/not available
+; C		= not supported/not available
 
 open_w:
 	LDX w_rect			; asking for some size? takes 16-bit (4)
@@ -260,7 +266,7 @@ ex_st:
 ; at last, launch code
 	LDX ex_pt			; where to jump (4)
 	CLI					; time to do it! (2)
-	JSR 0, X			; call and return to SIGKILL (4...)
+	JSR 0,X				; call and return to SIGKILL (4...)
 
 ; *** SIGKILL standard handler ***
 sig_kill:
@@ -293,7 +299,7 @@ signal:
 ; 6800 SIGTERM handlers end in RTS, thus a pretty standard jump is OK
 ; please note that it should clear C in case of no problems! 
 		LDX mm_sterm		; pointer to handler (4)
-		JMP 0, X			; will return to caller (4)
+		JMP 0,X				; will return to caller (4)
 sig_suic:
 	CMPA #SIGKILL		; suicide? (2)
 		BEQ sig_kill		; it was, thus terminate as usual (4)
@@ -348,6 +354,7 @@ set_handler:
 ;		OUTPUT
 ; ex_pt		= pointer to executable code
 ;		USES rh_scan (modifies it!) AND loc_str (new 20170606)
+; might change API somehow...
 
 load_link:
 ; *** look for that filename in ROM headers ***
@@ -360,25 +367,25 @@ ll_geth:
 		STX loc_str			; temporary internal pointer (5)
 		LDX rh_scan			; *** reload scanning address *** (4)
 ; ** check whether we are on a valid header!!! **
-		LDAA 0, X			; first of all should be a NUL (5)
+		LDAA 0,X			; first of all should be a NUL (5)
 #ifdef	SAFE
-		ORAA 254, X			; last word is CLEAR on 6800 architecture (5)
-		ORAA 255, X			; ***or put the whole 32-bit as big-endian?*** (5)
+		ORAA 254,X			; last word is CLEAR on 6800 architecture (5)
+		ORAA 255,X			; ***or put the whole 32-bit as big-endian?*** (5)
 #endif 
 			BNE ll_nfound		; link was lost, no more to scan (4)
-		LDAA 7, X			; after type and size, get eigth byte in header (5)
+		LDAA 7,X			; after type and size, get eigth byte in header (5)
 		CMPA #CR			; was it a CR? (2)
 			BNE ll_nfound		; if not, go away (4)
 ; look for the name
 ll_nloop:
-			LDAA 8, X			; get character in found name from its offset (5)
+			LDAA 8,X			; get character in found name from its offset (5)
 			LDX loc_str			; switch to name pointer (4)
-			CMPA 0, X			; compare with what we are looking for (5)
+			CMPA 0,X			; compare with what we are looking for (5)
 				BNE ll_nthis		; difference found (4)
 			INX					; advance this local name pointer... (4)
 			STX loc_str			; ...update stored... (5)
 			LDX rh_scan			; ...and switch back to header pointer (4)
-			TST 8, X			; otherwise check whether at EOL (7)
+			TST 8,X				; otherwise check whether at EOL (7)
 				BEQ ll_found		; all were zero, both ended names are the same! note different offset (4)
 			INX					; otherwise continue scanning (4)
 			STX rh_scan			; ...and update... (5)
@@ -387,8 +394,8 @@ ll_nthis:
 ; not this one, correct local pointer for the next header
 		CLR rh_scan+1		; reset LSB, assuming page-aligned headers! (6)
 		LDX rh_scan			; get full pointer to current header (4)
-		LDAA 252, X			; relative offset to number of pages (5)
-		LDAB 253, X			; also number of bytes (***last word is unused!***) (5)
+		LDAA 252,X			; relative offset to number of pages ***check endianness*** (5)
+		LDAB 253,X			; also number of bytes (***last word is unused!***) (5)
 		BEQ ll_bound		; if it does not cross boundary, do not advance page (4)
 			INCA				; otherwise goes into next page (2)
 ll_bound:
@@ -403,14 +410,13 @@ ll_found:
 ; from original LOADLINK code
 	CLR rh_scan+1		; reset LSB, assuming page-aligned headers! (6)
 	LDX rh_scan			; only header pointer will get used from here (4)
-	LDAA 1, X			; check filetype (5)
+	LDAA 1,X			; check filetype (5)
 	CMPA #'m'			; must be minimOS app! (2)
 		BNE ll_wrap		; error otherwise (4)
-	LDAA 2, X			; next byte is CPU type (5)
+	LDAA 2,X			; next byte is CPU type (5)
 ; check compability of supplied code against present CPU
 	ADMIN(GESTALT)		; fetch system info (3+8+43)
-	LDAB cpu_ll			; the parameter we are looking for (3)
-;	LDAB fw_cpu			; *** UGLY HACK, this is a FIRMWARE variable *** (3)
+	LDAB cpu_ll			; the parameter we are looking for, was fw_cpu (3)
 	CMPB #'H'			; is it a 68HC11 MCU? (2)
 		BEQ ll_hc11			; all Motorola is OK, but not Hitachi! (4)
 	CMPB #'K'			; Hitachi microcontroller? (2)
@@ -423,7 +429,7 @@ ll_found:
 ll_hc11:
 	CMPA #'H'			; code has HC11 extensions? (2)
 		BEQ ll_valid		; that is OK... (4)
-		BRA ll_mcu			; ...but skip Hitachi code (4)
+		BRA ll_mcu			; ...but otherwise skip Hitachi code (4)
 ll_hitachi:
 	CMPA #'K'			; Hitachi code? (2)
 		BEQ ll_valid		; this and old MCU code will do (4)
@@ -453,14 +459,14 @@ ll_valid:
 ; acc B		= dev
 ; str_pt	= pointer to string
 ;		OUTPUT
-; C = device error
+; C 		= device error
 ;		USES iol_dev, loc_str and whatever COUT takes
 
 string:
 	STAB iol_dev		; save device (4)
 	LDX str_pt			; get pointer (4)
 str_loop:
-		LDAA 0, X			; get character (5)
+		LDAA 0,X			; get character (5)
 			BEQ str_end			; NUL = end-of-string (4)
 		STAA io_c			; store output character for COUT (4)
 		STX loc_str			; save current index (5)
@@ -500,7 +506,7 @@ rl_l:
 			CMPB #EMPTY			; otherwise is just waiting? (2)
 		BEQ rl_l			; continue then (4)
 			LDX str_pt			; back to beginning (4)
-			CLR 0, X			; terminate string (7)
+			CLR 0,X				; terminate string (7)
 			SEC					; MUST set carry again! (2)
 			RTS					; and return whatever error (5)
 rl_rcv:
@@ -519,7 +525,7 @@ rl_rcv:
 rl_nbs:
 		CMPB ln_siz			; overflow? EEEEEEEEEEK (3)
 			BCS rl_l			; ignore if so (4)
-		STAA 0, X			; store into buffer (6)
+		STAA 0,X			; store into buffer (6)
 		INC	rl_cur			; update indexes (6+4)
 		INX
 rl_echo:
@@ -533,18 +539,17 @@ rl_cr:
 	LDAB rl_dev			; retrieve device (3)
 	JSR cout			; print newline ignoring errors (...)
 	LDX loc_str			; retrieve cursor!!!!! (4)
-	CLR 0, X			; terminate string (7)
+	CLR 0,X				; terminate string (7)
 	_EXIT_OK			; and all done! (7)
-
 
 
 ; **************************************************
 ; *** SET_FG, enable/disable frequency generator *** TO BE REVISED
 ; **************************************************
 ;		INPUT
-; zpar.w = dividing factor (times two?) IN LITTLE ENDIAN???
+; zpar.w	= dividing factor (times two?) IN LITTLE ENDIAN???
 ;		OUTPUT
-; C = busy
+; C			= busy
 ;
 ; should use some firmware interface, just in case it doesn't affect jiffy-IRQ!
 ; should also be Phi2-rate independent... input as Hz, or 100uS steps?
@@ -584,7 +589,7 @@ fg_busy:
 ;		INPUT
 ; acc B	= subfunction code
 ;		OUTPUT
-; C	= not implemented?
+; C		= not implemented?
 ;		USES da_ptr & b_sig (calls B_SIGNAL)
 ; sd_flag is a kernel variable
 
@@ -610,9 +615,9 @@ sd_2nd:
 sd_loop:
 ; get address index
 		STX da_ptr			; local index copy (5)
-		LDX 0, X			; get pointer to header (6)
+		LDX 0,X				; get pointer to header (6)
 			BEQ sd_done			; not ended (4)
-		JSR D_BYE, X		; call exit routine! cannot use da_ptr (8...)
+		JSR D_BYE,X			; call exit routine! cannot use da_ptr (8...)
 		LDX da_ptr			; retrieve list pointer (4)
 		INX					; advance to next entry (4+4)
 		INX
@@ -656,36 +661,36 @@ sd_fw:
 ; 6800 LOWRAM systems may just update the kern_ptr variable, without a firmware-owned table
 k_vec:
 ; basic I/O
-	JMP	cout		; output a character
-	JMP	cin			; get a character
-	JMP	string		; prints a C-string
-	JMP	readLN		; buffered input
+	JMP	cout			; output a character
+	JMP	cin				; get a character
+	JMP	string			; prints a C-string
+	JMP	readLN			; buffered input
 ; simple windowing system (placeholders)
-	JMP	open_w		; get I/O port or window
-	JMP	close_w		; close window
-	JMP	free_w		; will be closed by kernel
+	JMP	open_w			; get I/O port or window
+	JMP	close_w			; close window
+	JMP	free_w			; will be closed by kernel
 ; other generic functions
-	JMP	uptime		; approximate uptime in ticks
-	JMP	set_fg		; enable frequency generator (VIA T1@PB7)
-	JMP	shutdown	; proper shutdown procedure
-	JMP	load_link	; get addr. once in RAM/ROM
+	JMP	uptime			; approximate uptime in ticks
+	JMP	set_fg			; enable frequency generator (VIA T1@PB7)
+	JMP	shutdown		; proper shutdown procedure
+	JMP	load_link		; get address once in RAM/ROM
 ; simplified task management
-	JMP	b_fork		; get available PID ***returns 0
-	JMP	b_exec		; launch new process ***simpler
-	JMP	signal		; send UNIX-like signal to a braid ***SIGTERM & SIGKILL only
-	JMP	status		; get execution flags of a task ***eeeeeeeeeek
-	JMP	get_pid		; get PID of current braid ***returns 0
-	JMP	set_handler	; set SIGTERM handler
-	JMP	yield		; give away CPU time for I/O-bound process ***does nothing
+	JMP	b_fork			; get available PID ***returns 0
+	JMP	b_exec			; launch new process ***simpler
+	JMP	signal			; send UNIX-like signal to a braid ***SIGTERM & SIGKILL only
+	JMP	status			; get execution flags of a task ***eeeeeeeeeek
+	JMP	get_pid			; get PID of current braid ***returns 0
+	JMP	set_handler		; set SIGTERM handler
+	JMP	yield			; give away CPU time for I/O-bound process ***does nothing
 ; new functionalities TBD
-	JMP	aqmanage	; manage asynchronous task queue
-	JMP	pqmanage	; manage periodic task queue
+	JMP	aqmanage		; manage asynchronous task queue
+	JMP	pqmanage		; manage periodic task queue
 ; *** unimplemented functions ***
 #ifdef	SAFE
-	JMP	malloc		; reserve memory
-	JMP	memlock		; reserve some address
-	JMP	free		; release memory
-	JMP	release		; release ALL memory for a PID
-	JMP	ts_info		; get taskswitching info
-	JMP	set_curr	; set internal kernel info for running task
+	JMP	malloc			; reserve memory
+	JMP	memlock			; reserve some address
+	JMP	free			; release memory
+	JMP	release			; release ALL memory for a PID
+	JMP	ts_info			; get taskswitching info
+	JMP	set_curr		; set internal kernel info for running task
 #endif
