@@ -2,7 +2,7 @@
 ; sort-of-template, possibly KERAton inspired
 ; copy or link as options.h in root dir
 ; (c) 2015-2017 Carlos J. Santisteban
-; last modified 20170614-1224
+; last modified 20170614-1355
 
 ; *** set conditional assembly ***
 
@@ -58,7 +58,7 @@ ACIA		EQU	IO_BASE + $B0	; ACIA address ($80-$BF) from ¬IO.¬Y2
 ; with above devices, $00-$7F and $D0-$FF are free IO
 
 ; *** set standard device *** new 20160331 
-DEVICE		EQU	DEV_LED		; standard I/O device ***TBD
+DEVICE		EQU	237			; standard I/O device, 2651 ACIA?
 
 
 ; *** memory size ***

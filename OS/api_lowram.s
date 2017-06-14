@@ -1,7 +1,7 @@
 ; minimOS-63 generic Kernel API for LOWRAM systems
 ; v0.6a4
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170614-1252
+; last modified 20170614-1402
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -556,7 +556,7 @@ rl_cr:
 ; *******TO BE REVISED*********
 set_fg:
 ; *** preliminary 6800 code ***
-	LDAA VIA+ACR		; get current configuration (4)
+/*	LDAA VIA+ACR		; get current configuration (4)
 	LDX VIA+T1LL		; get older T1 latch values (5)
 	STX old_t1			; save them (5)
 ; *** TO_DO - should compare old and new values in order to adjust quantum size accordingly ***
@@ -578,7 +578,7 @@ fg_dis:
 	LDX old_t1			; older T1L (4)
 	STX VIA+T1LL		; restore old value, supposed to be running already (6)
 ; *** TO_DO - restore standard quantum ***
-	BRA fg_exit			; usual ending (4)
+	BRA fg_exit			; usual ending (4)*/
 fg_busy:
 	_ERR(BUSY)			; couldn't set (9)
 
@@ -595,7 +595,7 @@ fg_busy:
 
 shutdown:
 	CMPB #PW_STAT		; is it going to suspend? (2)
-		BEQ sd_stat			; don't shutdown system then! (4)
+		BEQ sd_fw			; don't shutdown system then! (4)
 	CMPB #PW_CLEAN		; from end of main task (2)
 		BEQ sd_2nd			; continue with second stage (4)
 	STAB sd_flag		; store mode for later, first must do proper (4)

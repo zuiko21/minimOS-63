@@ -2,7 +2,7 @@
 ; v0.6a6
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170614-1219
+; last modified 20170614-1358
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -47,7 +47,7 @@ kern_splash:
 	FDB		$5800			; time, 11.00
 	FDB		$4ACE			; date, 2017/6/14
 
-kern_siz	EQU kern_end - kern_head - $FF
+kern_siz	EQU (kern_end - kern_head - $FF)
 
 	FDB		kern_siz		; kernel size excluding header 
 	FDB		0
@@ -339,7 +339,7 @@ dr_eol:
 ; time to get a pointer to the-block-of-pointers (source)
 			LDX da_ptr			; work with current header (4)
 			LDX D_POLL,X		; get this pointer (6)
-			STX sysptr			; store it ***** check! (5)
+			STX systmp			; store it ***** check! (5)
 ; prepare another entry into queue
 			LDAA queues_mx+1	; get index of free P-entry! (4)
 			TAB					; two copies (2)
@@ -387,7 +387,7 @@ dr_notpq:
 ; worth advancing just the header pointer
 			LDX da_ptr			; work with current header (4)
 			LDX D_REQ,X		; get this pointer (6)
-			STX sysptr			; store it ***** check! (5)
+			STX systmp			; store it ***** check! (5)
 ; prepare another entry into queue
 			LDAA queues_mx		; get index of free R-entry! (4)
 			TAB					; two copies (2)
@@ -472,7 +472,7 @@ dr_error:
 dr_itask:
 ; *** preliminary 6800 version, room to optimise ***
 ; read address from header and update it!
-	LDX sysptr			; get set pointer (4)
+	LDX systmp			; get set pointer (4)
 #ifdef	MC6801
 	LDD 0,X				; MCUs get the whole word! (5)
 	LDX dq_ptr			; switch pointer (4)
@@ -505,10 +505,10 @@ dr_nextq:
 	STAA dq_ptr			; ready! (4)
 #endif
 ; and now the header reading pointer
-	LDX sysptr			; get set pointer (4)
+	LDX systmp			; get set pointer (4)
 	INX					; go for next entry (4+4)
 	INX
-	STX sysptr			; this has to be updated (5+5)
+	STX systmp			; this has to be updated (5+5)
 	RTS
 
 ; ***************************************************************
