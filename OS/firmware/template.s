@@ -2,13 +2,13 @@
 ; sort-of generic template
 ; v0.6a5
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170614-1109
+; last modified 20170615-0905
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
 
 ; in case of standalone assembly
-#include "usual.h"
+#include "../usual.h"
 
 ; *** first some ROM identification ***
 ; this is expected to be loaded at an aligned address anyway
@@ -71,7 +71,7 @@ post:
 	LDAA #'M'			; default 6800 installed
 	STAA fw_cpu			; store variable
 ; ...but check it for real afterwards, at least rejecting 6809
-#include	"firmware/modules/cpu_check.s"
+#include	"modules/cpu_check.s"
 
 ; *** preset kernel start address (standard label from ROM file) ***
 	LDX #kernel			; get full address
@@ -173,7 +173,7 @@ rst_nmi:
 
 ; *** default code for NMI handler, if not installed or invalid, should end in RTS ***
 std_nmi:
-#include "firmware/modules/std_nmi.s"
+#include "modules/std_nmi.s"
 
 
 ; ********************************

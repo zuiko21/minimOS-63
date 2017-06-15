@@ -1,15 +1,15 @@
 ; Monitor shell for minimOS-63 (simple version)
-; v0.6a1
-; last modified 20170614-1800
+; v0.6a2
+; last modified 20170615-1013
 ; (c) 2017 Carlos J. Santisteban
 
-#include "usual.h"
+#include "../usual.h"
 
 ; *** uncomment for narrow (20-char) displays ***
 ;#define	NARROW	_NARROW
 
 ; *** constant definitions ***
-#define	BUFSIZ		16
+#define	BUFSIZ		12
 ; bytes per line in dumps 4 or 8/16
 #ifdef	NARROW
 #define		PERLINE		4
@@ -23,36 +23,36 @@
 mon_head:
 ; *** header identification ***
 	FCB	0
-	FCC	"m"		; minimOS app!
+	FCC	"m"				; minimOS app!
 	FCB	CPU_TYPE
-	FCC	"****"		; some flags TBD
+	FCC	"****"			; some flags TBD
 	FCB	CR
 
 ; *** filename and optional comment ***
 montitle:
-	FCC	"monitor"	; file name (mandatory)
+	FCC	"monitor"		; file name (mandatory)
 	FCB	0
-	FCC	"NMOS & 816-savvy"	; comment
+	FCC	"for MC6800 and later!"	; comment
 	FCB	0
 
 ; advance to end of header
 	FILL	$FF, mon_head + $F8 - *, $FF	; for ready-to-blow ROM, advance to time/date field
 
 ; *** date & time in MS-DOS format at byte 248 ($F8) ***
-	FDB	$6800		; time, 13.00
-	FDB	$4ABF		; date, 2017/5/31
+	FDB	$6800			; time, 13.00
+	FDB	$4ABF			; date, 2017/5/31
 
 monSize	EQU	mon_end - mon_head - 256	; compute size NOT including header!
 
 ; filesize in top 32 bits NOT including header, new 20161216
-	FDB	monSize		; filesize
-	FDB	0			; 64K space does not use upper 16-bit
+	FDB	monSize			; filesize
+	FDB	0				; 64K space does not use upper 16-bit
 #endif
 ; ##### end of minimOS executable header #####
 
 ; *** declare zeropage variables ***
-; ##### uz is first available zeropage byte #####
-ptr		EQU z_used-1		; current address pointer
+; ##### uz_top is last available zeropage byte, z_used goes next #####
+ptr		EQU z_used-1	; current address pointer
 _pc		EQU ptr			; as per new model, filled by NMI hnadler
 siz		EQU ptr-2		; number of bytes to copy or transfer ('n')
 lines	EQU siz-1		; lines to dump ('u')
@@ -61,86 +61,70 @@ _b		EQU _a-1		; B register
 _x		EQU _b-2		; X register
 _sp		EQU _x-2		; stack pointer
 _psr	EQU _sp-1		; status register
-cursor	EQU _psr-1	; storage for X offset
+cursor	EQU _psr-2		; storage for full X cursor
 buffer	EQU cursor-BUFSIZ	; storage for input line (BUFSIZ chars)
 tmp		EQU buffer-2	; temporary storage
 tmp2	EQU tmp-2		; for hex dumps
-iodev	EQU tmp2-1	; standard I/O ##### minimOS specific #####
-
-__last	EQU iodev-1	; ##### just for easier size check #####
+iodev	EQU tmp2-1		; standard I/O ##### minimOS specific #####
 
 ; *** initialise the monitor ***
 
 ; ##### minimOS specific stuff #####
-	LDA #__last-uz		; zeropage space needed
+	LDAA #z_used-iodev	; zeropage space needed
 ; check whether has enough zeropage space
 #ifdef	SAFE
-	CMP z_used			; check available zeropage space
-	BCC go_mon			; enough space
-	BEQ go_mon			; just enough!
-		_ABORT(FULL)		; not enough memory otherwise (rare) new interface
+	CMPA z_used			; check available zeropage space
+	BLS go_mon			; enough space
+		_ABORT(FULL)		; not enough memory otherwise (rare)
 go_mon:
 #endif
 ; proceed normally
-	STA z_used			; set needed ZP space as required by minimOS
-	_STZA w_rect		; no screen size required
-	_STZA w_rect+1		; neither MSB
-	LDY #<montitle		; LSB of window title
-	LDA #>montitle		; MSB of window title
-	STY str_pt			; set parameter
-	STA str_pt+1
+	STAA z_used			; set needed ZP space as recommended by minimOS
+	LDX #0				; worth doing for...
+	STX w_rect			; ...no screen size required
+	LDX #montitle		; window title pointer
+	STX str_pt			; set parameter
 	_KERNEL(OPEN_W)		; ask for a character I/O device
 	BCC open_mon		; no errors
 		_ABORT(NO_RSRC)		; abort otherwise! proper error code
 open_mon:
-	STY iodev			; store device!!!
+	STAB iodev			; store device!!!
 ; ##### end of minimOS specific stuff #####
 ; print splash message, just the first time!
-	LDA #>mon_splash	; address of splash message
-	LDY #<mon_splash
+	LDX #mon_splash		; address of splash message
 	JSR prnStr			; print the string!
 
-; *** initialise relevant registers ***
-; hopefully the remaining registers will be stored by NMI/BRK handler, especially PC!
-	LDA #%00110000		; 8-bit sizes eeeeeeeek
-	STA _psr			; *** essential, at least while not previously set ***
 ; *** store current stack pointer as it will be restored upon JMP ***
-; * specially tailored code for 816-savvy version! *
+; no other relevant registers to be initialised
 get_sp:
-#ifdef	C816
-	.xl: REP #$10		; *** 16-bit index ***
-#endif
-	TSX					; get current stack pointer
-	STX _sp				; store original value
-#ifdef	C816
-	.xs: SEP #$10		; *** regular size ***
-#endif
+	STS _sp				; store current stack pointer
 ; does not really need to set PC/ptr
 ; these ought to be initialised after calling a routine!
-	LDA #__last-uz		; zeropage space needed (again)
-	STA z_used			; set needed ZP space as required by minimOS ####
+	LDAA #z_used-iodev	; zeropage space needed
+	STAA z_used			; set needed ZP space as required by minimOS ####
 ; global variables
-	LDA #4				; standard number of lines
-	STA lines			; set variable
-	STA siz				; also default transfer size
-	_STZA siz+1			; clear copy/transfer size MSB
+	LDAA #4				; standard number of lines
+	STAA lines			; set variable
+	STAA siz+1			; also default transfer size
+	CLR siz				; clear copy/transfer size MSB
 
 ; *** begin things ***
 main_loop:
 ; put current address before prompt
-		LDA ptr+1			; MSB goes first
+		LDAB ptr			; MSB goes first
 		JSR prnHex			; print it
-		LDA ptr				; same for LSB
+		LDAB ptr+1			; same for LSB
 		JSR prnHex
-		LDA #'>'		; prompt character
+		LDAB #'>'			; prompt character
 		JSR prnChar			; print it
 		JSR getLine			; input a line
-		LDX #$FF			; getNextChar will advance it to zero!
+		LDX #buffer-1		; getNextChar will advance it to initial position!
 		JSR gnc_do			; get first character on string, without the variable
+; **************6502*************6502
 		TAY					; just in case...
 			BEQ main_loop		; ignore blank lines!
 		STX cursor			; save cursor!
-		CMP #'Y'+1			; past last command?
+		CMP #'X'+1			; past last command?
 			BCS bad_cmd			; unrecognised
 #ifdef	SAFE
 		SBC #'?'-1			; first available command (had borrow)
@@ -603,14 +587,8 @@ sw_end:
 
 ; ** .X = set X register **
 set_X:
-	JSR fetch_byte		; get operand in A
-	STA _x				; set register
-	RTS
-
-; ** .Y = set Y register **
-set_Y:
-	JSR fetch_byte		; get operand in A
-	STA _y				; set register
+	JSR fetch_word		; get operand in X
+	STX _x				; set register
 	RTS
 
 ; ** .R = reboot or shutdown **
@@ -644,47 +622,41 @@ rb_exit:
 ;#include "libs/hexio.s"
 ; in the meanwhile, it takes these subroutines
 
-; * print a byte in A as two hex ciphers *
+; * print a byte in B as two hex ciphers *6502*********
 prnHex:
-	PHA					; keep whole value
-	LSR					; shift right four times (just the MSB)
-	LSR
-	LSR
-	LSR
+	STAB tmp2			; keep whole value
+	LSRB				; shift right four times (just the MSB)
+	LSRB
+	LSRB
+	LSRB
 	JSR ph_b2a			; convert and print this cipher
-	PLA					; retrieve full value
-	AND #$0F			; keep just the LSB... and repeat procedure
+	LDAB tmp2			; retrieve full value
+	ANDB #$0F			; keep just the LSB... and repeat procedure
 ph_b2a:
-	CMP #10				; will be a letter?
+	CMPB #10			; will be a letter?
 	BCC ph_n			; just a number
-		ADC #6				; convert to letter (plus carry)
+		ADCB #6				; convert to letter (plus carry)
 ph_n:
-	ADC #'0'			; convert to ASCII (carry is clear)
+	ADCB #'0'			; convert to ASCII (carry is clear)
 ; ...and print it (will return somewhere)
 
-; * print a character in A *
+; * print a character in B *
 prnChar:
-	STA io_c			; store character
-	LDY iodev			; get device
+	STAB io_c			; store character
+	LDAB iodev			; get device
 	_KERNEL(COUT)		; output it ##### minimOS #####
 ; ignoring possible I/O errors
 	RTS
 
-; * print a NULL-terminated string pointed by $AAYY *
+; * print a NULL-terminated string pointed by X *
 prnStr:
-	STA str_pt+1		; store MSB
-	STY str_pt			; LSB
-#ifdef	C816
-		PHK					; get current bank
-		PLA					; pick it up
-		STA str_pt+2		; set accordingly
-#endif
-	LDY iodev			; standard device
+	STX str_pt			; store pointer
+	LDAB iodev			; standard device
 	_KERNEL(STRING)		; print it! ##### minimOS #####
 ; currently ignoring any errors...
 	RTS
 
-; * convert two hex ciphers into byte@tmp, A is current char, X is cursor *
+; * convert two hex ciphers into byte@tmp, A is current char, X is cursor * 6502*6502*6502******
 ; * new approach for hex conversion *
 ; * add one nibble from hex in current char!
 ; A is current char, returns result in value[0...1]
@@ -720,32 +692,30 @@ h2n_err:
 ; * get input line from device at fixed-address buffer *
 ; new from API!
 getLine:
-	LDY #<buffer		; get buffer address
-	STY str_pt			; set parameter
-	_STZA str_pt+1		; it IS in zeropage!
-	LDX #BUFSIZ-1		; max index
-	STX ln_siz			; set value
-	LDY iodev			; use device
+	LDX #buffer			; get buffer address
+	STX str_pt			; set parameter
+	LDAA #BUFSIZ-1		; max index
+	STAA ln_siz			; set value
+	LDAB iodev			; use device
 	_KERNEL(READLN)		; get line
-; *** 16-bit API would resolve, but access from here is thru ZP opcodes ***
 	RTS					; and all done!
 
-; * get clean character from buffer in A, cursor at X *
+; * get clean character from buffer in A, pointer at X (stored in cursor) *
 getNextChar:
 	LDX cursor			; retrieve index
 gnc_do:
 	INX					; advance!
-	LDA buffer, X		; get raw character
-	  BEQ gn_ok  ; go away if ended
-	CMP #' '			; white space?
+	LDAA 0, X			; get raw character
+		BEQ gn_ok			; go away if ended
+	CMPA #' '			; white space?
 		BEQ gnc_do			; skip it!
-	CMP #'$'			; ignored radix?
+	CMPA #'$'			; ignored radix?
 		BEQ gnc_do			; skip it!
-	CMP #'a'			; not lowercase?
-		BCC gn_ok			; all done!
-	CMP #'z'+1			; still within lowercase?
-		BCS gn_ok			; otherwise do not correct!
-	AND #%11011111		; remove bit 5 to uppercase
+	CMPA #'a'			; not lowercase?
+		BCC gn_ok			; all done! ***6800???
+	CMPA #'z'+1			; still within lowercase?
+		BCS gn_ok			; otherwise do not correct! ***6800???
+	ANDA #%11011111		; remove bit 5 to uppercase
 gn_ok:
 	STX cursor			; eeeeeeeeeeeeeeeeeeeeek
 	RTS
@@ -755,57 +725,58 @@ backChar:
 	LDX cursor			; get current position
 bc_loop:
 		DEX					; back once
-		LDA buffer, X		; check what is pointed
-		CMP #' '			; blank?
+		LDAA 0, X			; check what is pointed
+		CMPA #' '			; blank?
 			BEQ bc_loop			; once more
-		CMP #TAB			; tabulation?
+		CMPA #TABU			; tabulation? **** 6800-savvy
 			BEQ bc_loop			; ignore
-		CMP #'$'			; ignored radix?
+		CMPA #'$'			; ignored radix?
 			BEQ bc_loop			; also ignore
 	STX cursor				; otherwise we are done
 	RTS
 
-; * fetch one byte from buffer, value in A and @value.b *
+; * fetch one byte from buffer, value in A and @value.b *6502
 ; newest approach as interface for fetch_value
 fetch_byte:
 	JSR fetch_value		; get whatever
-	LDA tmp2			; how many bytes will fit?
-	_INC				; round up chars...
-	LSR					; ...and convert to bytes
-	CMP #1				; strictly one?
-	_BRA ft_check		; common check
+	LDAA tmp2			; how many bytes will fit?
+	INCA				; round up chars...
+	LSRA				; ...and convert to bytes
+	CMPA #1				; strictly one?
+	BRA ft_check		; common check
 
-; * fetch two bytes from hex input buffer, value @value.w *
+; * fetch two bytes from hex input buffer, value @tmp *
 fetch_word:
 ; another approach using fetch_value
 	JSR fetch_value		; get whatever
-	LDA tmp2			; how many bytes will fit?
-	_INC				; round up chars...
-	LSR					; ...and convert to bytes
-	CMP #2				; strictly two?
+	LDAA tmp2			; how many bytes will fit?
+	INCA				; round up chars...
+	LSRA				; ...and convert to bytes
+	CMPA #2				; strictly two?
 ; common fetch error check
 ft_check:
 	BNE ft_err
 		CLC					; if so, all OK
-		LDA tmp				; convenient!!!
+		LDAA tmp+1			; convenient!!! LSB in A
 		RTS
 ; common fetch error discard routine
 ft_err:
-	LDA tmp2			; check how many chars were processed eeeeeeek
+	LDAB tmp2			; check how many chars were processed eeeeeeek
 	BEQ ft_clean		; nothing to discard eeeeeeeeek
 ft_disc:
 		JSR backChar		; should discard previous char!
-		DEC tmp2			; one less to go
+		DECB				; one less to go
 		BNE ft_disc			; continue until all was discarded
+	CLR tmp2			; just in case!
 ft_clean:
 	SEC					; there was an error
 	RTS
 
 ; * fetch typed value, no matter the number of chars *
 fetch_value:
-	_STZA tmp			; clear full result
-	_STZA tmp+1
-	_STZA tmp2			; no chars processed yet
+	LDX #0				; worth doing...
+	STX tmp				; ...to clear full result
+	STX tmp2			; no chars processed yet
 ; could check here for symbolic references...
 ftv_loop:
 		JSR getNextChar		; go to operand first cipher!
@@ -818,108 +789,153 @@ ftv_bad:
 	CLC					; always check temp=0 for errors!
 	RTS
 
-; *** pointers to command routines (? to Y) ***
+; *** pointers to command routines (? to X) ***
 cmd_ptr:
 #ifdef	SAFE
-	.word	help			; .?
-	.word		_unrecognised	; .@
+	FDB		help		; .?
+	FDB			_unrecognised	; .@
 #endif
-	.word	set_A			; .A
-	.word	store_byte		; .B
-	.word	call_address	; .C
-	.word		_unrecognised	; .D
-	.word	examine			; .E
-	.word		_unrecognised	; .F
-	.word	set_SP			; .G
-	.word		_unrecognised	; .H
-	.word		_unrecognised	; .I
-	.word	jump_address	; .J
-	.word	ext_bytes		; .K
-	.word		_unrecognised	; .L
-	.word	move			; .M
-	.word	set_count		; .N
-	.word	origin			; .O
-	.word	set_PSR			; .P
-	.word	quit			; .Q
-	.word	reboot			; .R
-	.word	store_str		; .S
-	.word		_unrecognised	; .T
-	.word	set_lines		; .U
-	.word	view_regs		; .V
-	.word	store_word		; .W
-	.word	set_X			; .X
-	.word	set_Y			; .Y
+	FDB		set_A		; .A
+	FDB		set_B		; .B
+	FDB		call_address	; .C
+	FDB			_unrecognised	; .D
+	FDB		examine		; .E
+	FDB			_unrecognised	; .F
+	FDB		set_SP		; .G
+	FDB			_unrecognised	; .H
+	FDB			_unrecognised	; .I
+	FDB		jump_address	; .J
+	FDB		ext_bytes	; .K
+	FDB			_unrecognised	; .L
+	FDB		move		; .M
+	FDB		set_count	; .N
+	FDB		origin		; .O
+	FDB		set_PSR		; .P
+	FDB		quit		; .Q
+	FDB		reboot		; .R
+	FDB		store_str	; .S
+	FDB		store_byte	; .T
+	FDB		set_lines	; .U
+	FDB		view_regs	; .V
+	FDB		store_word	; .W
+	FDB		set_X		; .X
 
 
 ; *** strings and other data ***
 #ifdef	NOHEAD
 montitle:
-	.asc	"monitor", 0
+	FCC		"monitor", 0
 #endif
 
 mon_splash:
-	.asc	"minimOS 0.6 monitor", CR
-	.asc	"(c) 2016-2017 Carlos J. Santisteban", CR, 0
-
+	FCC		"minimOS·63 monitor"
+	FCB		CR
+	FCC		"v0.6, (c) 2017"
+	FCB		CR
+	FCC		"Carlos Santisteban"
+	FCB		CR
+	FCB		0
 
 err_bad:
-	.asc	"** Bad command **", CR, 0
+	FCC		"** Bad command **"
+	FCB		CR
+	FCB		0
 
 regs_head:
-	.asc	"A: X: Y: S: NV-bDIZC", CR, 0
+#ifdef	NARROW
+	FCC	"A:B: X:   S:  HINZVC"
+#else
+	FCC	"A: B: X:   S:   --HINZVC"
+	FCB		CR
+#endif
+	FCB		0
 
 dump_in:
 #ifdef	NARROW
-	.asc	"[", 0		; for 20-char version
+	FCC		"["			; for 20-char version
 #else
-	.asc	" [", 0
+	FCC		" ["
 #endif
+	FCB		0
 
 dump_out:
-	.asc	"] ", 0
+	FCC		"] "
+	FCB		0
 
 set_str:
-	.asc	"-> $", 0
+	FCC		"-> $"
+	FCB		0
 
 #ifdef	SAFE
 ; I/O error message stripped on non-SAFE version
 io_err:
-	.asc	"*** I/O error ***", CR, 0
+	FCC		"*** I/O error ***"
+	FCB		CR
+	FCB		0
+
 
 ; online help only available under the SAFE option!
 help_str:
-	.asc	"---Command list---", CR
-	.asc	"? = show this list", CR
-	.asc	"Ad = set A reg.", CR
-	.asc	"Bd = store byte", CR
-	.asc	"C* = call subroutine", CR
-	.asc	"E* = dump 'u' lines", CR
-	.asc	"Gd = set SP reg.", CR
-	.asc	"J* = jump to address", CR
-	.asc	"Kcd=load/save n byt.", CR
-	.asc	"   from/to device #d", CR
-	.asc	"Ma =copy n byt. to a", CR
-	.asc	"N* = set 'n' value", CR
-	.asc	"O* = set origin", CR
-	.asc	"Pd = set Status reg", CR
-	.asc	"Q = quit", CR
-	.asc	"Rx = reboot/poweroff", CR
-	.asc	"Ss = put raw string", CR
-	.asc	"Ud = set 'u' lines", CR
-	.asc	"V = view registers", CR
-	.asc	"Wa = store word", CR
-	.asc	"Xd = set X reg.", CR
-	.asc	"Yd = set Y reg.", CR
-	.asc	"--- values ---", CR
-	.asc	"d => 2 hex char.", CR
-	.asc	"a => 4 hex char.", CR
-	.asc	"* => up to 4 char.", CR
-	.asc	"s => raw string", CR
-	.asc	"c = +(load)/ -(save)", CR
-	.asc	"x=Cold/Warm/Shutdown", CR
+	FCC 	"---Command list---"
+	FCB		CR
+	FCC 	"? = show this list"
+	FCB		CR
+	FCC 	"Ad = set A reg."
+	FCB		CR
+	FCC 	"Bd = set B reg."
+	FCB		CR
+	FCC 	"C* = call subroutine"
+	FCB		CR
+	FCC 	"E* = dump 'u' lines"
+	FCB		CR
+	FCC 	"Gd = set SP reg."
+	FCB		CR
+	FCC 	"J* = jump to address"
+	FCB		CR
+	FCC 	"Kcd=load/save n byt."
+	FCB		CR
+	FCC 	"   from/to device #d"
+	FCB		CR
+	FCC 	"Ma =copy n byt. to a"
+	FCB		CR
+	FCC 	"N* = set 'n' value"
+	FCB		CR
+	FCC 	"O* = set origin"
+	FCB		CR
+	FCC 	"Pd = set Status reg"
+	FCB		CR
+	FCC 	"Q = quit"
+	FCB		CR
+	FCC 	"Rx = reboot/poweroff"
+	FCB		CR
+	FCC 	"Ss = put raw string"
+	FCB		CR
+	FCC 	"Td = store byte"
+	FCB		CR
+	FCC 	"Ud = set 'u' lines"
+	FCB		CR
+	FCC 	"V = view registers"
+	FCB		CR
+	FCC 	"Wa = store word"
+	FCB		CR
+	FCC 	"Xa = set X reg."
+	FCB		CR
+	FCC 	"--- values ---"
+	FCB		CR
+	FCC 	"d => 2 hex char."
+	FCB		CR
+	FCC 	"a => 4 hex char."
+	FCB		CR
+	FCC 	"* => up to 4 char."
+	FCB		CR
+	FCC 	"s => raw string"
+	FCB		CR
+	FCC 	"c = +(load)/ -(save)"
+	FCB		CR
+	FCC 	"x=Cold/Warm/Shutdown"
+	FCB		CR
 
 #endif
-	.byt	0
+	FCB		0
 
 mon_end:				; for size computation
-.)
