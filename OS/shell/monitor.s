@@ -1,6 +1,6 @@
 ; Monitor shell for minimOS·63 (simple version)
 ; v0.6a3
-; last modified 20170615-1352
+; last modified 20170615-1415
 ; (c) 2017 Carlos J. Santisteban
 
 #include "../usual.h"
@@ -39,7 +39,7 @@ montitle:
 	FILL	$FF, mon_head + $F8 - *, $FF	; for ready-to-blow ROM, advance to time/date field
 
 ; *** date & time in MS-DOS format at byte 248 ($F8) ***
-	FDB		$6800		; time, 13.00
+	FDB		$7000		; time, 14.00
 	FDB		$4ACF		; date, 2017/6/15
 
 monSize	EQU	mon_end - mon_head - 256	; compute size NOT including header!
@@ -64,6 +64,7 @@ _psr	EQU _sp-1		; status register
 cursor	EQU _psr-2		; storage for full X cursor
 buffer	EQU cursor-BUFSIZ	; storage for input line (BUFSIZ chars)
 tmp		EQU buffer-2	; temporary storage
+smc_pt	EQU tmp-1		; for SMC!!! (JMP 'tmp')
 tmp2	EQU tmp-2		; for hex dumps, LSB also used for SMC (JMP 'tmp')
 iodev	EQU tmp2-1		; standard I/O ##### minimOS specific #####
 
@@ -210,7 +211,7 @@ call_address:
 	STAB _b
 	STX _x
 ; hopefully no stack imbalance was caused, otherwise will not resume monitor!
-	PLAA				; this (eeeeek) will take previously saved default device
+	PULA				; this (eeeeek) will take previously saved default device
 	STAA iodev			; store device!!!
 	INS					; must discard previous return address, as will reinitialise stuff!
 	INS
@@ -229,7 +230,7 @@ jump_address:
 ; restore registers and jump
 do_call:
 	LDAA #$7E			; *** opcode for JMP ext ***
-	STAA tmp2+1			; ...stored just in front of desired address!
+	STAA smc_pt			; ...stored just in front of desired address!
 	LDX _x				; retrieve registers
 	LDAB _b				; accumulator B
 	LDAA _a				; get saved accumulator A...
@@ -237,7 +238,7 @@ do_call:
 	LDAA _psr			; status is differently set...
 	TAP					; ...from A
 	PULA				; lastly retrieve accumulator (does not alter status)
-	JMP tmp2+1			; *** go via SMC! *** might return somewhere else
+	JMP smc_pt			; *** go via SMC! *** might return somewhere else
 
 ; ** .E = examine 'u' lines of memory **
 examine:
@@ -261,8 +262,7 @@ ex_h:
 #ifndef	NARROW
 			TSTA				; check offset
 			BEQ ex_ns			; no space if the first one
-				LDAB #' '			; print space, not in 20-char
-				JSR prnChar
+				JSR vr_spc			; common space print!
 ex_ns:
 #endif
 			LDX tmp2			; set pointer...
@@ -288,7 +288,7 @@ ex_a:
 			LDAB 0,X			; ...and get byte
 			CMPB #127			; check whether printable
 				BGT ex_np
-			CMP #' '
+			CMPB #' '
 				BLT ex_np
 			BRA ex_pr			; it is printable
 ex_np:
@@ -326,6 +326,7 @@ help:
 ; placeholder will send (-) or read (+) raw data to/from indicated I/O device
 ext_bytes:
 ; *** set labels from miniMoDA ***
+/*
 count	= tmp2+1		; subcommand
 temp	= cursor		; will store I/O channel
 oper	= tmp			; 16-bit counter
@@ -420,9 +421,9 @@ ex_err:
 	JSR prnStr			; print it and finish function afterwards
 	_BRA ex_show		; there is nothing to increment!
 #endif
+*/
 
-; ** .M = move (copy) 'n' bytes of memory **6502
-
+; ** .M = move (copy) 'n' bytes of memory **
 move:
 ; preliminary 6800 code, forward only
 	JSR fetch_value		; get operand word
@@ -497,24 +498,22 @@ quit:
 	INS
 	_FINISH				; exit to minimOS, proper error code
 
-; ** .S = store raw string **6502
+; ** .S = store raw string **
 store_str:
-		INC cursor			; skip the S and increase, not INY
-		LDY cursor			; allows NMOS macro!
-		LDA buffer, Y		; get raw character
-		_STAY(ptr)			; store in place, STAX will not work
-#ifdef	NMOS
-		TAY					; update flags altered by macro!
-#endif
+		LDX cursor			; set pointer
+		INX					; first skip the S, then go increasing
+		LDAA 0,X			; get raw character
+		STX cursor			; update...
+		LDX ptr				; ...and switch pointer
+		STAA 0,X			; store in place
 			BEQ sstr_end		; until terminator, will be stored anyway
-		CMP #CR				; newline also accepted, just in case
+		CMPA #CR			; newline also accepted, just in case
 			BEQ sstr_cr			; terminate and exit
-		INC ptr				; advance destination
-		BNE store_str		; boundary not crossed
-	INC ptr+1			; next page otherwise
-	BNE store_str		; continue, no real need for BRA
+		INX					; advance destination
+		STX ptr				; update pointer
+		BRA store_str		; should end sometime!
 sstr_cr:
-	_STZA buffer, X		; terminate string
+	CLR 0,X				; terminate string
 sstr_end:
 	RTS
 
@@ -580,18 +579,20 @@ vr_off:
 		PULA				; ...and counter
 		DECA				; one less
 		BNE vr_sb			; until done
+; newline-printing common routine
 po_cr:
-#ifndef	NARROW
 	LDAB #CR			; print newline
 	JMP prnChar			; will return
-#else
-	RTS					; just return, line had wrapped
-#endif
+; space-printing common routine
+vr_spc:
+	LDAB #' '			; print space
+	JMP prnChar			; will return to caller
+
 
 ; ** .W = store word **
 store_word:
 	JSR fetch_value		; get operand word
-	LDA tmp				; get MSB
+	LDAA tmp			; get MSB
 	LDX ptr				; also pointer
 	STAA 0,X			; store in memory
 	INX					; next byte
@@ -722,7 +723,7 @@ getNextChar:
 	LDX cursor			; retrieve index
 gnc_do:
 	INX					; advance!
-	LDAA 0, X			; get raw character
+	LDAA 0,X			; get raw character
 		BEQ gn_ok			; go away if ended
 	CMPA #' '			; white space?
 		BEQ gnc_do			; skip it!
@@ -742,7 +743,7 @@ backChar:
 	LDX cursor			; get current position
 bc_loop:
 		DEX					; back once
-		LDAA 0, X			; check what is pointed
+		LDAA 0,X			; check what is pointed
 		CMPA #' '			; blank?
 			BEQ bc_loop			; once more
 		CMPA #TABU			; tabulation? **** 6800-savvy
@@ -797,7 +798,7 @@ fetch_value:
 ; could check here for symbolic references...
 ftv_loop:
 		JSR getNextChar		; go to operand first cipher!
-		BSR hex2nib			; process one char
+		JSR hex2nib			; process one char
 			BCS ftv_bad			; no more valid chars
 		INC tmp2			; otherwise count one
 		BNE ftv_loop		; until no more valid, no real need for BRA
@@ -860,9 +861,9 @@ err_bad:
 
 regs_head:
 #ifdef	NARROW
-	FCC	"A:B: X:   S:  HINZVC"
+	FCC	"A,B, X,   S,  HINZVC"
 #else
-	FCC	"A: B: X:   S:   HINZVC"
+	FCC	"A, B, X,   S,   HINZVC"
 	FCB		CR
 #endif
 	FCB		0

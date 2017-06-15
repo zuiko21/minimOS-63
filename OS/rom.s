@@ -1,7 +1,7 @@
 ; minimOS·63 ROM template
 ; v0.6a1
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170615-0900
+; last modified 20170615-1409
 
 ; create ready-to-blow ROM image
 #define		ROM		_ROM
@@ -37,8 +37,8 @@ sysvol:
 
 	FILL	$FF, sysvol + $F8 - *				; for ready-to-blow ROM, advance to time/date field
 
-	.word	$4800				; time, 9.00
-	.word	$4ACF				; date, 2017/06/15
+	FDB		$4800				; time, 9.00
+	FDB		$4ACF				; date, 2017/06/15
 
 ;romsize	EQU	$FF00 - ROM_BASE	; compute size! excluding header
 
