@@ -1,4 +1,4 @@
-; minimOS-63 zeropage
+; minimOS·63 zeropage
 ; v0.6a5
 ; last modified 20170614-1234
 ; MASM compliant 20170614

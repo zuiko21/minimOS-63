@@ -1,4 +1,4 @@
-; Monitor shell for minimOS-63 (simple version)
+; Monitor shell for minimOS·63 (simple version)
 ; v0.6a2
 ; last modified 20170615-1013
 ; (c) 2017 Carlos J. Santisteban

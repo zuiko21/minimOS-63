@@ -1,4 +1,4 @@
-; default options for minimOS-63 and other modules
+; default options for minimOS·63 and other modules
 ; sort-of-template, possibly KERAton inspired
 ; copy or link as options.h in root dir
 ; (c) 2015-2017 Carlos J. Santisteban
@@ -9,7 +9,7 @@
 ; comment for optimized code without optional checks
 #define		SAFE			_SAFE
 #define		LOWRAM			_LOWRAM
-;#define		NOHEAD
+;#define	NOHEAD			_NOHEAD
 
 ; *** machine specific info ***
 ; select type as on executable headers

@@ -1,4 +1,4 @@
-; minimOS-63 generic Kernel API for LOWRAM systems
+; minimOS·63 generic Kernel API for LOWRAM systems
 ; v0.6a4
 ; (c) 2017 Carlos J. Santisteban
 ; last modified 20170614-1402

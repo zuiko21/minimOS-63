@@ -1,4 +1,4 @@
-; firmware for minimOS-63
+; firmware for minimOS·63
 ; sort-of generic template
 ; v0.6a5
 ; (c)2017 Carlos J. Santisteban
