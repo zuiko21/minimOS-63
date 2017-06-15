@@ -1,6 +1,6 @@
 ; Monitor shell for minimOS·63 (simple version)
 ; v0.6a3
-; last modified 20170615-1307
+; last modified 20170615-1332
 ; (c) 2017 Carlos J. Santisteban
 
 #include "../usual.h"
@@ -422,67 +422,60 @@ ex_err:
 #endif
 
 ; ** .M = move (copy) 'n' bytes of memory **6502
-move:
-; preliminary version goes forward only, modifies ptr.MSB and X!
 
+move:
+; preliminary 6800 code, forward only
 	JSR fetch_value		; get operand word
 #ifdef	SAFE
-	LDA tmp2			; at least one?
+	TST tmp2			; at least one?
 	BNE mv_ok
 		JMP _unrecognised	; reject zero loudly
 mv_ok:
 #endif
-	LDY #0				; reset offset
-	LDX siz+1			; check n MSB
-		BEQ mv_l			; go to second stage if zero
-mv_hl:
-		LDA (ptr), Y		; get source byte
-		STA (tmp), Y		; copy at destination
-		INY					; next byte
-		BNE mv_hl			; until a page is done
-	INC ptr+1			; next page
-	INC tmp+1
-	DEX					; one less to go
-		BNE mv_hl			; stay in first stage until the last page
-	LDA siz				; check LSB
-		BEQ mv_end			; nothing to copy!
-mv_l:
-		LDA (ptr), Y		; get source byte
-		STA (tmp), Y		; copy at destination
-		INY					; next byte
-		CPY siz				; compare with LSB
-		BNE mv_l			; continue until done
+	LDX siz				; copy original size...
+		BEQ mv_end			; (unless nothing to do!)
+	STX tmp2			; ...on a safe place
+mv_loop:
+		LDX ptr				; set source pointer
+		LDAB 0,X			; get source byte
+		INX					; one more...
+		STX ptr				; ...and update
+		LDX tmp				; switch to destination pointer
+		STAB 0,X			; copy at destination
+		INX					; one more...
+		STX tmp				; ...and update
+		LDX tmp2			; lets see the counter
+		DEX					; one less to go (may set Z)
+		STX tmp2			; updated...
+		BNE mv_loop			; ...until expired
 mv_end:
 	RTS
 
-; ** .N = set 'n' value **6502*****************6502*********************
+; ** .N = set 'n' value **
 set_count:
 	JSR fetch_value		; get operand word
-	LDAB tmp			; copy LSB
+	LDX tmp				; whole word
 #ifdef	SAFE
-	BNE sc_ok			; not zero is OK
-		LDX tmp+1			; check MSB otherwise
 		BEQ sc_z			; there was nothing!
 sc_ok:
 #endif
-	STA siz				; into destination variable
+	STX siz				; into destination variable
 sc_z:
-	PHA					; for common ending!
-	LDA tmp+1			; and MSB
-	STA siz+1
-	PHA					; to be displayed right now...
+	LDAB siz+1			; check current or updated value LSB
+	PSHB				; into stack
+	LDAB siz			; same for MSB
+	PSHB
 
-; *** common ending for .N and .U ***6502
+; *** common ending for .N and .U ***
 ; 16-bit REVERSED value on stack!
 nu_end:
-	LDA #>set_str		; pointer to rest of message
-	LDY #<set_str
+	LDX #set_str		; pointer to rest of message
 	JSR prnStr			; print that
-	PLA					; check current or updated value MSB
+	PULB				; get pushed MSB
 	JSR prnHex			; show in hex
-	PLA					; same for LSB
+	PULB				; also for LSB
 	JSR prnHex			; show in hex
-	JMP po_cr			; print trailing newline and return!
+	BRA po_cr			; print trailing newline and return!
 
 ; ** .O = set origin **
 origin:
@@ -525,29 +518,29 @@ sstr_cr:
 sstr_end:
 	RTS
 
-; ** .U = set 'u' number of lines/instructions **6502
+; ** .U = set 'u' number of lines/instructions **
 set_lines:
 	JSR fetch_byte		; get operand in A
 #ifdef	SAFE
-	TAX					; check value
+	TSTA				; check value
 		BEQ sl_z			; nothing to set
 #endif
-	STA lines			; set number of lines
+	STAA lines			; set number of lines
 sl_z:
-	PHA					; to be displayed
-	LDA #0				; no MSB
-	PHA
-	_BRA nu_end
+	PSHA				; to be displayed
+	CLRA				; no MSB
+	PSHA
+	BRA nu_end
 
 ; ** .V = view register values **6502**************************
 view_regs:
-	LDA #>regs_head		; print header
-	LDY #<regs_head
+	LDX #regs_head		; print header
 	JSR prnStr
 ; since _pc and ptr are the same, no need to print it!
-	LDX #0				; reset counter
+	LDAA #0				; reset counter
+	LDX #_a
 vr_l:
-		_PHX				; save index!
+		PSHA				; save counter!
 		LDA _a, X			; get value from regs
 		JSR prnHex			; show value in hex
 ; without PC being shown, narrow displays will also put regular spacing
@@ -577,17 +570,14 @@ po_cr:
 ; ** .W = store word **
 store_word:
 	JSR fetch_value		; get operand word
-	LDA tmp				; get LSB
-	_STAY(ptr)			; store in memory
-	INC ptr				; next byte
-	BNE sw_nw			; no wrap
-		INC ptr+1			; otherwise increment pointer MSB
-sw_nw:
-	LDA tmp+1			; same for MSB
-	_STAY(ptr)
-	INC ptr				; next byte
-	BNE sw_end			; no wrap
-		INC ptr+1			; otherwise increment pointer MSB
+	LDA tmp				; get MSB
+	LDX ptr				; also pointer
+	STAA 0,X			; store in memory
+	INX					; next byte
+	LDAA tmp+1			; same for LSB
+	STAA 0,X			; store in memory
+	INX					; next byte
+	STX ptr				; update incremented pointer
 sw_end:
 	RTS
 
