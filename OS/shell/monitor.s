@@ -1,6 +1,6 @@
 ; Monitor shell for minimOS·63 (simple version)
 ; v0.6a3
-; last modified 20170615-1332
+; last modified 20170615-1352
 ; (c) 2017 Carlos J. Santisteban
 
 #include "../usual.h"
@@ -532,40 +532,61 @@ sl_z:
 	PSHA
 	BRA nu_end
 
-; ** .V = view register values **6502**************************
+; ** .V = view register values **
 view_regs:
 	LDX #regs_head		; print header
 	JSR prnStr
 ; since _pc and ptr are the same, no need to print it!
-	LDAA #0				; reset counter
-	LDX #_a
-vr_l:
-		PSHA				; save counter!
-		LDA _a, X			; get value from regs
-		JSR prnHex			; show value in hex
-; without PC being shown, narrow displays will also put regular spacing
-		LDA #' '			; space, not for 20-char
-		JSR prnChar			; print it
-		_PLX				; restore index
-		INX					; next reg
-		CPX #4				; all regs done?
-		BNE vr_l			; continue otherwise
-	LDX #8				; number of bits
-	STX tmp				; temp counter
-	LDA _psr			; copy original value
-	STA tmp+1			; temp storage
+; preliminary non-loop version
+; * A *
+	LDAB _a				; get register...
+	JSR prnHex			; show value in hex
+#ifndef	NARROW
+	BSR vr_spc			; add separation
+#endif
+; * B *
+	LDAB _b				; get register...
+	JSR prnHex			; show value in hex
+	BSR vr_spc			; always add separation
+; * X *
+	LDAB _x				; get register MSB...
+	JSR prnHex			; show value in hex
+	LDAB _x+1			; get register LSB...
+	JSR prnHex			; show value in hex
+	BSR vr_spc			; always add separation
+; * S *
+	LDAB _sp			; get register MSB...
+	JSR prnHex			; show value in hex
+	LDAB _sp+1			; get register LSB...
+	JSR prnHex			; show value in hex
+#ifndef	NARROW
+	BSR vr_spc			; add separation
+#endif
+; * bitwise P *
+	LDAA #8				; bit to show from PSR
+	LDAB _psr			; copy original status
+	ASLB				; discard two irrelevant bits
+	ASLB
 vr_sb:
-		ASL tmp+1			; get highest bit
-		LDA #' '			; default is off (space)
-		BCC vr_off			; was off
-			_INC				; otherwise turns into '!'
+		PSHA				; keep counter!
+		ASLB				; get leftmost bit
+		PSHB				; keep remaining status (PSR unaffected)
+		LDAB #' '			; default is off (space) C unaffected
+		BCC vr_off			; was really off
+			INCB				; otherwise turns into '!'
 vr_off:
 		JSR prnChar			; prints bit
-		DEC tmp				; one less
+		PULB				; retrieve remaining status...
+		PULA				; ...and counter
+		DECA				; one less
 		BNE vr_sb			; until done
 po_cr:
-	LDA #CR				; print newline
+#ifndef	NARROW
+	LDAB #CR			; print newline
 	JMP prnChar			; will return
+#else
+	RTS					; just return, line had wrapped
+#endif
 
 ; ** .W = store word **
 store_word:
@@ -626,7 +647,7 @@ prnHex:
 	LSRB
 	LSRB
 	LSRB
-	JSR ph_b2a			; convert and print this cipher
+	BSR ph_b2a			; convert and print this cipher
 	PULB 				; retrieve full value
 	ANDB #$0F			; keep just the LSB... and repeat procedure
 ph_b2a:
@@ -734,7 +755,7 @@ bc_loop:
 ; * fetch one byte from buffer, value in A and @value.b *6502
 ; newest approach as interface for fetch_value
 fetch_byte:
-	JSR fetch_value		; get whatever
+	BSR fetch_value		; get whatever
 	LDAA tmp2			; how many bytes will fit?
 	INCA				; round up chars...
 	LSRA				; ...and convert to bytes
@@ -744,7 +765,7 @@ fetch_byte:
 ; * fetch two bytes from hex input buffer, value @tmp *
 fetch_word:
 ; another approach using fetch_value
-	JSR fetch_value		; get whatever
+	BSR fetch_value		; get whatever
 	LDAA tmp2			; how many bytes will fit?
 	INCA				; round up chars...
 	LSRA				; ...and convert to bytes
@@ -760,7 +781,7 @@ ft_err:
 	LDAB tmp2			; check how many chars were processed eeeeeeek
 	BEQ ft_clean		; nothing to discard eeeeeeeeek
 ft_disc:
-		JSR backChar		; should discard previous char!
+		BSR backChar		; should discard previous char!
 		DECB				; one less to go
 		BNE ft_disc			; continue until all was discarded
 	CLR tmp2			; just in case!
@@ -776,12 +797,12 @@ fetch_value:
 ; could check here for symbolic references...
 ftv_loop:
 		JSR getNextChar		; go to operand first cipher!
-		JSR hex2nib			; process one char
+		BSR hex2nib			; process one char
 			BCS ftv_bad			; no more valid chars
 		INC tmp2			; otherwise count one
 		BNE ftv_loop		; until no more valid, no real need for BRA
 ftv_bad:
-	JSR backChar		; should discard very last char! eeeeeeeek
+	BSR backChar		; should discard very last char! eeeeeeeek
 	CLC					; always check temp=0 for errors!
 	RTS
 
@@ -841,7 +862,7 @@ regs_head:
 #ifdef	NARROW
 	FCC	"A:B: X:   S:  HINZVC"
 #else
-	FCC	"A: B: X:   S:   --HINZVC"
+	FCC	"A: B: X:   S:   HINZVC"
 	FCB		CR
 #endif
 	FCB		0
