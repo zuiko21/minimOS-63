@@ -1,6 +1,6 @@
 ; Monitor shell for minimOS·63 (simple version)
 ; v0.6a2
-; last modified 20170615-1013
+; last modified 20170615-1102
 ; (c) 2017 Carlos J. Santisteban
 
 #include "../usual.h"
@@ -22,37 +22,37 @@
 	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF), $FF	; page alignment!!! eeeeek
 mon_head:
 ; *** header identification ***
-	FCB	0
-	FCC	"m"				; minimOS app!
-	FCB	CPU_TYPE
-	FCC	"****"			; some flags TBD
-	FCB	CR
+	FCB		0
+	FCC		"m"			; minimOS app!
+	FCB		CPU_TYPE
+	FCC		"****"		; some flags TBD
+	FCB		CR
 
 ; *** filename and optional comment ***
 montitle:
-	FCC	"monitor"		; file name (mandatory)
-	FCB	0
-	FCC	"for MC6800 and later!"	; comment
-	FCB	0
+	FCC		"monitor"	; file name (mandatory)
+	FCB		0
+	FCC		"for MC6800 and later!"	; comment
+	FCB		0
 
 ; advance to end of header
 	FILL	$FF, mon_head + $F8 - *, $FF	; for ready-to-blow ROM, advance to time/date field
 
 ; *** date & time in MS-DOS format at byte 248 ($F8) ***
-	FDB	$6800			; time, 13.00
-	FDB	$4ABF			; date, 2017/5/31
+	FDB		$6800		; time, 13.00
+	FDB		$4ABF		; date, 2017/5/31
 
 monSize	EQU	mon_end - mon_head - 256	; compute size NOT including header!
 
 ; filesize in top 32 bits NOT including header, new 20161216
-	FDB	monSize			; filesize
-	FDB	0				; 64K space does not use upper 16-bit
+	FDB		monSize		; filesize
+	FDB		0			; 64K space does not use upper 16-bit
 #endif
 ; ##### end of minimOS executable header #####
 
 ; *** declare zeropage variables ***
 ; ##### uz_top is last available zeropage byte, z_used goes next #####
-ptr		EQU z_used-1	; current address pointer
+ptr		EQU z_used-2	; current address pointer
 _pc		EQU ptr			; as per new model, filled by NMI hnadler
 siz		EQU ptr-2		; number of bytes to copy or transfer ('n')
 lines	EQU siz-1		; lines to dump ('u')
@@ -108,7 +108,9 @@ get_sp:
 	STAA siz+1			; also default transfer size
 	CLR siz				; clear copy/transfer size MSB
 
+; ********************
 ; *** begin things ***
+; ********************
 main_loop:
 ; put current address before prompt
 		LDAB ptr			; MSB goes first
@@ -120,56 +122,72 @@ main_loop:
 		JSR getLine			; input a line
 		LDX #buffer-1		; getNextChar will advance it to initial position!
 		JSR gnc_do			; get first character on string, without the variable
-; **************6502*************6502
-		TAY					; just in case...
+		TSTA				; recheck flags!
 			BEQ main_loop		; ignore blank lines!
-		STX cursor			; save cursor!
-		CMP #'X'+1			; past last command?
-			BCS bad_cmd			; unrecognised
+;		STX cursor			; save cursor!
+		CMPA #'X'+1			; past last command?
+			BCS bad_cmd			; unrecognised***
 #ifdef	SAFE
-		SBC #'?'-1			; first available command (had borrow)
+		SUBA #'?'			; first available command
 #else
-		SBC #'A'-1			; first available command (had borrow)
+		SUBA #'A'			; first available command
 #endif
-			BCC bad_cmd			; cannot be lower
-		ASL					; times two to make it index
-		TAX					; use as index
-		JSR call_mcmd		; call monitor command
-		_BRA main_loop		; continue forever
+			BMI bad_cmd			; cannot be lower
+		ASLA				; times two to make it offset
+; *** call command routine, pointer offset in A ***
+#ifdef	MC6801
+		TAB					; the place to be added from
+		LDX #cmd_ptr		; base address
+		ABX					; compute entry address
+#else
+		ADDA #<cmd_ptr		; add to table LSB
+		STAA tmp+1			; store partial result
+		LDAA #>cmd_ptr		; go for MSB
+		ADCA #0				; propagate carry
+		STAA tmp			; pointer is complete
+		LDX tmp				; get temporary pointer
+#endif
+		LDX 0,X				; solve yet another indirection
+		JSR 0,X				; call and return here!
+		BRA main_loop		; continue forever
+
 ; *** generic error handling ***
 _unrecognised:
-	PLA					; discard main loop return address
-	PLA
+	INS					; discard main loop return address
+	INS
 bad_cmd:
-	LDA #>err_bad		; address of error message
-	LDY #<err_bad
+	LDX #err_bad		; address of error message
 d_error:
 	JSR prnStr			; display error
-	_BRA main_loop		; continue
+	BRA main_loop		; continue
 
-; *** call command routine ***
-call_mcmd:
-	_JMPX(cmd_ptr)		; indexed jump macro, supposedly from bank 0 only!
-
+; ****************************************************
 ; *** command routines, named as per pointer table ***
+; ****************************************************
 
-; ** .A = set accumulator **
+; ** .A = set accumulator A **
 set_A:
 	JSR fetch_byte		; get operand in A
-	STA _a				; set accumulator
+	STAA _a				; set accumulator
 	RTS
 
-; ** .B = store byte **
+; ** .B = set accumulator B **
+set_B:
+	JSR fetch_byte		; get operand in A
+	STAA _b				; set accumulator
+	RTS
+
+; ** .T = store byte **
 store_byte:
 	JSR fetch_byte		; get operand in A
-	_STAY(ptr)			; set byte in memory
-	INC ptr				; advance pointer
-	BNE sb_end			; all done if no wrap
-		INC ptr+1			; increase MSB otherwise
+	LDX ptr				; pointer position
+	STAA 0,X			; set byte in memory
+	INX					; advance pointer
+	STX ptr				; update current value
 sb_end:
 	RTS
 
-; ** .C = call address **
+; ** .C = call address **6502
 call_address:
 	JSR fetch_value		; get operand address
 #ifdef	SAFE
@@ -198,7 +216,7 @@ call_address:
 	PLA
 	JMP get_sp			; hopefully context is OK, will restore as needed
 
-; ** .J = jump to an address **
+; ** .J = jump to an address **6502
 jump_address:
 	JSR fetch_value		; get operand address
 #ifdef	SAFE
@@ -228,7 +246,7 @@ do_call:
 	PLP					; restore status
 	JMP (tmp)			; go! might return somewhere else
 
-; ** .E = examine 'u' lines of memory **
+; ** .E = examine 'u' lines of memory **6502
 examine:
 	JSR fetch_value		; get address
 	LDY tmp				; save tmp elsewhere
@@ -300,19 +318,19 @@ ex_npb:
 
 ; ** .G = set stack pointer **
 set_SP:
-	JSR fetch_byte		; get operand in A
-	STA _sp				; set stack pointer (LSB only)
+	JSR fetch_word		; get operand in @tmp
+	LDX tmp				; this was the value
+	STX _sp				; set stack pointer
 	RTS
 
 ; ** .? = show commands **
 #ifdef	SAFE
 help:
-	LDA #>help_str		; help string
-	LDY #<help_str
+	LDX #help_str		; help string
 	JMP prnStr			; print it, and return to main loop
 #endif
 
-; ** .K = keep (load or save) **
+; ** .K = keep (load or save) **6502
 ; ### highly system dependent ###
 ; placeholder will send (-) or read (+) raw data to/from indicated I/O device
 ext_bytes:
@@ -412,7 +430,7 @@ ex_err:
 	_BRA ex_show		; there is nothing to increment!
 #endif
 
-; ** .M = move (copy) 'n' bytes of memory **
+; ** .M = move (copy) 'n' bytes of memory **6502
 move:
 ; preliminary version goes forward only, modifies ptr.MSB and X!
 
@@ -446,10 +464,10 @@ mv_l:
 mv_end:
 	RTS
 
-; ** .N = set 'n' value **
+; ** .N = set 'n' value **6502*****************6502*********************
 set_count:
 	JSR fetch_value		; get operand word
-	LDA tmp				; copy LSB
+	LDAB tmp			; copy LSB
 #ifdef	SAFE
 	BNE sc_ok			; not zero is OK
 		LDX tmp+1			; check MSB otherwise
@@ -463,7 +481,7 @@ sc_z:
 	STA siz+1
 	PHA					; to be displayed right now...
 
-; *** common ending for .N and .U ***
+; *** common ending for .N and .U ***6502
 ; 16-bit REVERSED value on stack!
 nu_end:
 	LDA #>set_str		; pointer to rest of message
@@ -478,27 +496,24 @@ nu_end:
 ; ** .O = set origin **
 origin:
 	JSR fetch_value		; get operand word
-	LDY tmp				; copy LSB
-	LDA tmp+1			; and MSB
-	STY ptr				; into destination variable
-	STA ptr+1
+	LDX tmp				; copy value...
+	STX ptr				; into destination variable
 	RTS
 
 ; ** .P = set status register **
 set_PSR:
 	JSR fetch_byte		; get operand in A
-	ORA #$30			; *** let X & M set on 65816 ***
-	STA _psr			; set status
+	STAA _psr			; set status
 	RTS
 
 ; ** .Q = standard quit **
 quit:
 ; will not check any pending issues
-	PLA					; discard main loop return address
-	PLA
+	INS					; discard main loop return address
+	INS
 	_FINISH				; exit to minimOS, proper error code
 
-; ** .S = store raw string **
+; ** .S = store raw string **6502
 store_str:
 		INC cursor			; skip the S and increase, not INY
 		LDY cursor			; allows NMOS macro!
@@ -519,7 +534,7 @@ sstr_cr:
 sstr_end:
 	RTS
 
-; ** .U = set 'u' number of lines/instructions **
+; ** .U = set 'u' number of lines/instructions **6502
 set_lines:
 	JSR fetch_byte		; get operand in A
 #ifdef	SAFE
@@ -533,7 +548,7 @@ sl_z:
 	PHA
 	_BRA nu_end
 
-; ** .V = view register values **
+; ** .V = view register values **6502**************************
 view_regs:
 	LDA #>regs_head		; print header
 	LDY #<regs_head
@@ -587,28 +602,29 @@ sw_end:
 
 ; ** .X = set X register **
 set_X:
-	JSR fetch_word		; get operand in X
+	JSR fetch_word		; get operand @tmp
+	LDX tmp
 	STX _x				; set register
 	RTS
 
 ; ** .R = reboot or shutdown **
 reboot:
 	JSR getNextChar		; is there an extra character?
-	TAX					; check whether end of buffer
+	TSTA				; check whether end of buffer
 		BEQ rb_exit			; no interactive option
-	CMP #'W'			; asking for warm boot?
+	CMPA #'W'			; asking for warm boot?
 	BNE rb_notw
-		LDY #PW_WARM		; warm boot request ## minimOS specific ##
-		_BRA fw_shut		; call firmware, could use BNE?
+		LDAB #PW_WARM		; warm boot request ## minimOS specific ##
+		BRA fw_shut		; call firmware, could use BNE?
 rb_notw:
-	CMP #'C'			; asking for cold boot?
+	CMPA #'C'			; asking for cold boot?
 	BNE rb_notc
-		LDY #PW_COLD		; cold boot request ## minimOS specific ##
-		_BRA fw_shut		; call firmware, could use BNE?
+		LDAB #PW_COLD		; cold boot request ## minimOS specific ##
+		BRA fw_shut			; call firmware, could use BNE?
 rb_notc:
-	CMP #'S'			; asking for shutdown?
+	CMPA #'S'			; asking for shutdown?
 	BNE rb_exit			; otherwise abort quietly
-		LDY #PW_OFF			; poweroff request ## minimOS specific ##
+		LDAB #PW_OFF		; poweroff request ## minimOS specific ##
 fw_shut:
 		_KERNEL(SHUTDOWN)	; unified firmware call
 rb_exit:
@@ -622,7 +638,7 @@ rb_exit:
 ;#include "libs/hexio.s"
 ; in the meanwhile, it takes these subroutines
 
-; * print a byte in B as two hex ciphers *6502*********
+; * print a byte in B as two hex ciphers *
 prnHex:
 	STAB tmp2			; keep whole value
 	LSRB				; shift right four times (just the MSB)
@@ -634,10 +650,10 @@ prnHex:
 	ANDB #$0F			; keep just the LSB... and repeat procedure
 ph_b2a:
 	CMPB #10			; will be a letter?
-	BCC ph_n			; just a number
-		ADCB #6				; convert to letter (plus carry)
+	BLT ph_n			; just a number
+		ADDB #7				; convert to letter
 ph_n:
-	ADCB #'0'			; convert to ASCII (carry is clear)
+	ADDB #'0'			; convert to ASCII
 ; ...and print it (will return somewhere)
 
 ; * print a character in B *
@@ -656,30 +672,29 @@ prnStr:
 ; currently ignoring any errors...
 	RTS
 
-; * convert two hex ciphers into byte@tmp, A is current char, X is cursor * 6502*6502*6502******
+; * convert two hex ciphers into byte@tmp, A is current char, X is cursor *
 ; * new approach for hex conversion *
 ; * add one nibble from hex in current char!
 ; A is current char, returns result in value[0...1]
 ; does NOT advance any cursor (neither reads char from nowhere)
 ; MUST reset value previously!
 hex2nib:
-	SEC					; prepare for subtract
-	SBC #'0'			; convert from ASCII
-		BCC h2n_err			; below number!
-	CMP #10				; already OK?
-	BCC h2n_num			; do not convert from letter
-		CMP #23				; otherwise should be a valid hex
-			BCS h2n_rts			; or not! exits with C set
-		SBC #6				; convert from hex (C is clear!)
+	SUBA #'0'			; convert from ASCII
+		BMI h2n_err			; below number!
+	CMPA #10			; already OK?
+	BLT h2n_num			; do not convert from letter
+		CMPA #23			; otherwise should be a valid hex
+			BGT h2n_err			; or not!
+		SUBA #7				; convert from hex
 h2n_num:
-	LDY #4				; shifts counter, no longer X in order to save some pushing!
+	LDAB #4				; shifts counter, no longer X in order to save some pushing!
 h2n_loop:
-		ASL tmp				; current value will be times 16
-		ROL tmp+1
-		DEY					; next iteration
+		ASL tmp+1			; current value will be times 16
+		ROL tmp
+		DECB				; next iteration
 		BNE h2n_loop
-	ORA tmp				; combine with older value
-	STA tmp
+	ORAA tmp+1			; combine with older value
+	STAA tmp+1
 	CLC					; all done without error
 h2n_rts:
 	RTS					; usual exit
