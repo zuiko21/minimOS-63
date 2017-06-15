@@ -1,6 +1,6 @@
 ; Monitor shell for minimOS·63 (simple version)
 ; v0.6a3
-; last modified 20170615-1215
+; last modified 20170615-1307
 ; (c) 2017 Carlos J. Santisteban
 
 #include "../usual.h"
@@ -64,7 +64,7 @@ _psr	EQU _sp-1		; status register
 cursor	EQU _psr-2		; storage for full X cursor
 buffer	EQU cursor-BUFSIZ	; storage for input line (BUFSIZ chars)
 tmp		EQU buffer-2	; temporary storage
-tmp2	EQU tmp-2		; for hex dumps
+tmp2	EQU tmp-2		; for hex dumps, LSB also used for SMC (JMP 'tmp')
 iodev	EQU tmp2-1		; standard I/O ##### minimOS specific #####
 
 ; ******************************
@@ -216,7 +216,7 @@ call_address:
 	INS
 	JMP get_sp			; hopefully context is OK, will restore as needed
 
-; ** .J = jump to an address **6502
+; ** .J = jump to an address **
 jump_address:
 	JSR fetch_value		; get operand address
 #ifdef	SAFE
@@ -234,78 +234,76 @@ do_call:
 	LDAB _b				; accumulator B
 	LDAA _a				; get saved accumulator A...
 	PSHA				; ...into stack!
-	LDA _psr			; status is differently set...
+	LDAA _psr			; status is differently set...
 	TAP					; ...from A
 	PULA				; lastly retrieve accumulator (does not alter status)
 	JMP tmp2+1			; *** go via SMC! *** might return somewhere else
 
-; ** .E = examine 'u' lines of memory **6502
+; ** .E = examine 'u' lines of memory **
 examine:
 	JSR fetch_value		; get address
-	LDY tmp				; save tmp elsewhere
-	LDA tmp+1
-	STY tmp2
-	STA tmp2+1
-	LDX lines			; get counter
+	LDX tmp				; save tmp elsewhere
+	STX tmp2
+	LDAA lines			; get original counter
 ex_l:
-		_PHX				; save counters
-		LDA tmp2+1			; address MSB
+		PSHA				; save counter
+		LDAB tmp2			; address MSB
 		JSR prnHex			; print it
-		LDA tmp2			; same for LSB
+		LDAB tmp2+1			; same for LSB
 		JSR prnHex
-		LDA #>dump_in		; address of separator
-		LDY #<dump_in
+		LDX #dump_in		; address of separator
 		JSR prnStr			; print it
 		; loop for 4/8 hex bytes
-		LDY #0				; reset offset
+		LDAA #0				; reset offset
 ex_h:
-			_PHY				; save offset
+			PSHA				; save offset
 ; space only when wider than 20 char AND if not the first
 #ifndef	NARROW
+			TSTA				; check offset
 			BEQ ex_ns			; no space if the first one
-				_PHY				; please keep Y!
-				LDA #' '			; print space, not in 20-char
+				LDAB #' '			; print space, not in 20-char
 				JSR prnChar
-				_PLY				; retrieve Y!
 ex_ns:
 #endif
-			LDA (tmp2), Y		; get byte
+			LDX tmp2			; set pointer...
+			LDAB 0,X			; ...and get byte
 			JSR prnHex			; print it in hex
-			_PLY				; retrieve index
-			INY					; next byte
-			CPY #PERLINE		; bytes per line (8 if not 20-char)
+			PULA				; retrieve offset
+			INX					; next byte
+			INCA
+			CMPA #PERLINE		; bytes per line (8 if not 20-char)
 			BNE ex_h			; continue line
-		LDA #>dump_out		; address of separator
-		LDY #<dump_out
+		LDX #dump_out		; address of separator
 		JSR prnStr			; print it
 		; loop for 4/8 ASCII
-		LDY #0				; reset offset
+		LDAA #0				; reset offset...
+		LDAB tmp2+1			; ...and for pointer...
+		SUBB #PERLINE		; ...decrement it back to start of line
+		STAB tmp2+1
+		BCC ex_a			; no borrow to propagate into MSB...
+			DEC tmp2			; ...or move to PREVIOUS page
 ex_a:
-			_PHY				; save offset BEFORE!
-			LDA (tmp2), Y		; get byte
-			CMP #127			; check whether printable
-				BCS ex_np
+			PSHA				; save offset BEFORE!
+			LDX tmp2			; set pointer...
+			LDAB 0,X			; ...and get byte
+			CMPB #127			; check whether printable
+				BGT ex_np
 			CMP #' '
-				BCC ex_np
-			_BRA ex_pr			; it is printable
+				BLT ex_np
+			BRA ex_pr			; it is printable
 ex_np:
-				LDA #'.'			; substitute
+				LDAB #'.'			; otherwise, substitute
 ex_pr:		JSR prnChar			; print it
-			_PLY				; retrieve index
-			INY					; next byte
-			CPY #PERLINE		; bytes per line (8 if not 20-char)
+			PULA				; retrieve index
+			INX					; next byte
+			INCA
+			CMPA #PERLINE		; bytes per line (8 if not 20-char)
 			BNE ex_a			; continue line
-		LDA #CR				; print newline
+		LDAB #CR				; print newline
 		JSR prnChar
-		LDA tmp2			; get pointer LSB
-		CLC
-		ADC #PERLINE		; add shown bytes (8 if not 20-char)
-		STA tmp2			; update pointer
-		BCC ex_npb			; skip if within same page
-			INC tmp2+1			; next page
-ex_npb:
-		_PLX				; retrieve counter!!!!
-		DEX					; one line less
+; pointer was incremented thru second loop!
+		PULA				; retrieve counter!!!!
+		DECA				; one line less
 		BNE ex_l			; continue until done
 	RTS
 
@@ -633,13 +631,13 @@ rb_exit:
 
 ; * print a byte in B as two hex ciphers *
 prnHex:
-	STAB tmp2			; keep whole value
+	PSHB				; keep whole value
 	LSRB				; shift right four times (just the MSB)
 	LSRB
 	LSRB
 	LSRB
 	JSR ph_b2a			; convert and print this cipher
-	LDAB tmp2			; retrieve full value
+	PULB 				; retrieve full value
 	ANDB #$0F			; keep just the LSB... and repeat procedure
 ph_b2a:
 	CMPB #10			; will be a letter?
