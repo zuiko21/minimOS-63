@@ -1,6 +1,6 @@
 ; Monitor shell for minimOS·63 (simple version)
-; v0.6a2
-; last modified 20170615-1102
+; v0.6a3
+; last modified 20170615-1215
 ; (c) 2017 Carlos J. Santisteban
 
 #include "../usual.h"
@@ -40,7 +40,7 @@ montitle:
 
 ; *** date & time in MS-DOS format at byte 248 ($F8) ***
 	FDB		$6800		; time, 13.00
-	FDB		$4ABF		; date, 2017/5/31
+	FDB		$4ACF		; date, 2017/6/15
 
 monSize	EQU	mon_end - mon_head - 256	; compute size NOT including header!
 
@@ -67,7 +67,9 @@ tmp		EQU buffer-2	; temporary storage
 tmp2	EQU tmp-2		; for hex dumps
 iodev	EQU tmp2-1		; standard I/O ##### minimOS specific #####
 
+; ******************************
 ; *** initialise the monitor ***
+; ******************************
 
 ; ##### minimOS specific stuff #####
 	LDAA #z_used-iodev	; zeropage space needed
@@ -99,7 +101,8 @@ open_mon:
 get_sp:
 	STS _sp				; store current stack pointer
 ; does not really need to set PC/ptr
-; these ought to be initialised after calling a routine!
+
+; *** these ought to be initialised after calling a routine! ***
 	LDAA #z_used-iodev	; zeropage space needed
 	STAA z_used			; set needed ZP space as required by minimOS ####
 ; global variables
@@ -125,15 +128,15 @@ main_loop:
 		TSTA				; recheck flags!
 			BEQ main_loop		; ignore blank lines!
 ;		STX cursor			; save cursor!
-		CMPA #'X'+1			; past last command?
-			BCS bad_cmd			; unrecognised***
+		CMPA #'X'			; compare against last command?
+			BGT bad_cmd			; past it, unrecognised
 #ifdef	SAFE
 		SUBA #'?'			; first available command
 #else
 		SUBA #'A'			; first available command
 #endif
-			BMI bad_cmd			; cannot be lower
-		ASLA				; times two to make it offset
+			BMI bad_cmd			; ...cannot be lower
+		ASLA				; times two to make it pointer offset
 ; *** call command routine, pointer offset in A ***
 #ifdef	MC6801
 		TAB					; the place to be added from
@@ -147,7 +150,7 @@ main_loop:
 		STAA tmp			; pointer is complete
 		LDX tmp				; get temporary pointer
 #endif
-		LDX 0,X				; solve yet another indirection
+		LDX 0,X				; get indirect address from table entry
 		JSR 0,X				; call and return here!
 		BRA main_loop		; continue forever
 
@@ -187,64 +190,54 @@ store_byte:
 sb_end:
 	RTS
 
-; ** .C = call address **6502
+; ** .C = call address **
 call_address:
 	JSR fetch_value		; get operand address
 #ifdef	SAFE
-	LDA tmp2			; at least one?
+	TST tmp2			; at least one?
 		BEQ _unrecognised	; reject zero loudly
 #endif
 ; setting SP upon call makes little sense...
-	LDA iodev			; *** must push default device for later ***
-	PHA
-	JSR do_call			; set regs and jump!
-#ifdef	C816
-	.xs: .as: SEP #$30	; *** make certain about standard size ***
-#endif
-; ** should record actual registers here **
-	STA _a
+	LDAA iodev			; must push default device for later
+	PSHA
+	JSR do_call			; *** set regs and jump! ***
+; ** should record current registers here **
+	PSHA				; save A as will take PSR
+	TPA					; get current status
+	STAA _psr			; and store it
+	PULA				; retrieve A accumulator
+	STAA _a				; store in array
+	STAB _b
 	STX _x
-	STY _y
-	PHP					; get current status
-	CLD					; eeeeeeeeeeeeeek
-	PLA					; A was already saved
-	STA _psr
 ; hopefully no stack imbalance was caused, otherwise will not resume monitor!
-	PLA					; this (eeeeek) will take previously saved default device
-	STA iodev			; store device!!!
-	PLA					; must discard previous return address, as will reinitialise stuff!
-	PLA
+	PLAA				; this (eeeeek) will take previously saved default device
+	STAA iodev			; store device!!!
+	INS					; must discard previous return address, as will reinitialise stuff!
+	INS
 	JMP get_sp			; hopefully context is OK, will restore as needed
 
 ; ** .J = jump to an address **6502
 jump_address:
 	JSR fetch_value		; get operand address
 #ifdef	SAFE
-	LDA tmp2			; at least one?
+	TST tmp2			; at least one?
 		BEQ _unrecognised	; reject zero loudly
-;	BNE jp_ok
-;		JMP _unrecognised	; reject zero loudly
-;jp_ok:
 #endif
 ; restore stack pointer...
-#ifdef	C816
-	.xl: REP #$10		; *** essential 16-bit index ***
-#endif
-	LDX _sp				; get stored value (word)
-	TXS					; set new pointer...
+	LDS _sp				; get stored value (word)
 ; SP restored
 ; restore registers and jump
 do_call:
-#ifdef	C816
-	.xs: .as: SEP #$30	; *** make certain about standard size ***
-#endif
+	LDAA #$7E			; *** opcode for JMP ext ***
+	STAA tmp2+1			; ...stored just in front of desired address!
 	LDX _x				; retrieve registers
-	LDY _y
-	LDA _psr			; status is different
-	PHA					; will be set via PLP
-	LDA _a				; lastly retrieve accumulator
-	PLP					; restore status
-	JMP (tmp)			; go! might return somewhere else
+	LDAB _b				; accumulator B
+	LDAA _a				; get saved accumulator A...
+	PSHA				; ...into stack!
+	LDA _psr			; status is differently set...
+	TAP					; ...from A
+	PULA				; lastly retrieve accumulator (does not alter status)
+	JMP tmp2+1			; *** go via SMC! *** might return somewhere else
 
 ; ** .E = examine 'u' lines of memory **6502
 examine:
