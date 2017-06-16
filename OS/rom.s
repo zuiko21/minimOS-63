@@ -1,7 +1,7 @@
 ; minimOS·63 ROM template
 ; v0.6a1
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170616-0902
+; last modified 20170616-0952
 
 ; create ready-to-blow ROM image
 #define		ROM		_ROM
@@ -35,7 +35,7 @@ sysvol:
 	FCC		"20170616-0857"			; build date and time
 	FCB		0
 
-	FILL	$FF, (sysvol + $F8 - *)	; for ready-to-blow ROM, advance to time/date field
+	FILL	$FF, sysvol+$F8-*		; for ready-to-blow ROM, advance to time/date field
 
 	FDB		$4800		; time, 9.00
 	FDB		$4AD0		; date, 2017/06/16
@@ -68,7 +68,8 @@ kernel	EQU * + 256	; skip header
 ; **************************
 ; ### should include a standard header here! ###
 #ifndef	NOHEAD
-	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)	; page alignment!!! eeeeek
+	; standard page alignment for CPP-MASM
+	ORG		*-1&$FF00+$100	; eeeeeek
 drv_file:
 	FCB		0
 	FCC		"aD****"	; driver pack file plus flags TBD
@@ -76,7 +77,7 @@ drv_file:
 	FCC		"drivers"	; filename and empty comment
 	FDB		0
 
-	FILL	$FF, drv_file + $F8 - *		; padding
+	FILL	$FF, drv_file+$F8-*			; padding
 
 	FDB		$4800		; time, 09.00
 	FDB		$4ACF		; date, 2017/06/15
@@ -106,15 +107,16 @@ drv_end:				; for easier size computation
 ; ****** skip I/O area for more ******
 ; ##### empty header #####
 #ifndef	NOHEAD
-	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)	; page alignment!!! eeeeek
-empty_head:
+	; standard page alignment for CPP-MASM
+	ORG		*-1&$FF00+$100	; eeeeeek
+mpty_head:
 	FCB		0			; don't enter here! NUL marks beginning of header
 	FCC		"aS****"	; just reserved SYSTEM space
 	FCB		CR
 	FCC		"[I/O]"		; file name (mandatory) and empty comment
 	FDB		0
 ; advance to end of header
-	FILL	$FF, empty_head + $FC - *		; for ready-to-blow ROM, advance to size
+	FILL	$FF, empty_head+$FC-*			; for ready-to-blow ROM, advance to size
 ; *** no valid date & time ***
 emptySize	EQU	afterIO - empty_head -256	; compute size NOT including header!
 
@@ -126,8 +128,7 @@ emptySize	EQU	afterIO - empty_head -256	; compute size NOT including header!
 
 ; *** blank space for I/O area skipping ***
 afterIO		EQU $E000			; assume I/O ends at $DFFF
-	FILL	$FF, afterIO - *F	; skip I/O and page alignment!!!
-;	ORG	afterIO					; should be already there
+	ORG		afterIO				; OK to do this way in S19 format!
 
 ; *************************************
 ; ****** more software after I/O ******
@@ -139,7 +140,8 @@ afterIO		EQU $E000			; assume I/O ends at $DFFF
 ; ****** skip rest of unused ROM until firmware ******
 ; ##### empty header #####
 #ifndef	NOHEAD
-	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)	; page alignment!!! eeeeek
+	; standard page alignment for CPP-MASM
+	ORG		*-1&$FF00+$100	; eeeeeek
 free_head:
 	FCB		0			; don't enter here! NUL marks beginning of header
 	FCC		"aS****"	; just reserved SYSTEM space
@@ -148,7 +150,7 @@ free_head:
 	FCC		"OM]"		; file name (mandatory) and empty comment *** note macro savvy
 	FDB		0
 ; advance to end of header
-	FILL	$FF, free_head + $FC - *		; for ready-to-blow ROM, advance to size
+	FILL	$FF, free_head+$FC-*			; for ready-to-blow ROM, advance to size
 ; *** no valid date & time ***
 freeSize	EQU	FW_BASE - free_head -256	; compute size NOT including header!
 
@@ -161,8 +163,7 @@ freeSize	EQU	FW_BASE - free_head -256	; compute size NOT including header!
 ; ***************************************
 ; *** make separate room for firmware ***
 ; ***************************************
-	FILL	$FF, FW_BASE - *	; for ready-to-blow ROM, skip to firmware area
-;	ORG	FW_BASE					; should be already there
+;	ORG	FW_BASE					; done this way in S19 format!
 
 ; ***********************************
 ; *** hardware-dependent firmware ***
