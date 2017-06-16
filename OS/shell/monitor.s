@@ -1,6 +1,6 @@
 ; Monitor shell for minimOS·63 (simple version)
 ; v0.6a3
-; last modified 20170616-1007
+; last modified 20170616-1341
 ; (c) 2017 Carlos J. Santisteban
 
 #include "../usual.h"
@@ -21,7 +21,7 @@
 #ifndef	NOHEAD
 	; standard page alignment for CPP-MASM
 	ORG		*-1&$FF00+$100	; eeeeeek
-on_head:
+mon_head:
 ; *** header identification ***
 	FCB		0
 	FCB		'm'			; minimOS app!
