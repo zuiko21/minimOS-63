@@ -2,7 +2,7 @@
 ; v0.6a6
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170614-1427
+; last modified 20170616-1000
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -42,7 +42,7 @@ kern_splash:
 	FCC		"minimOS·63 0.6a6"	; version in comment
 	FCB		0
 
-	FILL	$FF, kern_head + $F8 - *	; padding
+	FILL	$FF, kern_head+$F8-*		; padding
 
 	FDB		$5800			; time, 11.00
 	FDB		$4ACE			; date, 2017/6/14
