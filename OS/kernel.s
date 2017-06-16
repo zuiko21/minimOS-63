@@ -28,10 +28,8 @@
 
 ; *** standard header, at least for testing ***
 #ifndef	NOHEAD
-;	FILL	$FF, $100*((* & $FF) != 0) - (* & $FF)	; page alignment!!! eeeeek
 ; standard page alignment for CPP-MASM
-	ORG		(* & $FF) + $100*((* & $FF) <> 0)
-
+	ORG		*-1&$FF00+$100	; eeeeeek
 kern_head:
 	FCB		0
 	FCB		'm'
@@ -612,7 +610,8 @@ kern_end:		; for size computation
 #ifdef	NOHEAD
 shell:					; no header to skip
 #else
-	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)	; page alignment!!! eeeeek
+; standard page alignment for CPP-MASM
+	ORG		*-1&$FF00+$100	; eeeeeek
 shell		EQU	* + 256		; skip header
 #endif
 
