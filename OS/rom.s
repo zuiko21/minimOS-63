@@ -1,7 +1,7 @@
 ; minimOS·63 ROM template
 ; v0.6a1
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170616-0952
+; last modified 20170616-1431
 
 ; create ready-to-blow ROM image
 #define		ROM		_ROM
@@ -57,7 +57,7 @@ sysvol:
 #ifdef	NOHEAD
 kernel:
 #else
-kernel	EQU * + 256	; skip header
+kernel	EQU *+256		; skip header
 #endif
 
 ; includes appropriate shell with its own header
@@ -109,7 +109,7 @@ drv_end:				; for easier size computation
 #ifndef	NOHEAD
 	; standard page alignment for CPP-MASM
 	ORG		*-1&$FF00+$100	; eeeeeek
-mpty_head:
+empty_head:
 	FCB		0			; don't enter here! NUL marks beginning of header
 	FCC		"aS****"	; just reserved SYSTEM space
 	FCB		CR
@@ -118,7 +118,7 @@ mpty_head:
 ; advance to end of header
 	FILL	$FF, empty_head+$FC-*			; for ready-to-blow ROM, advance to size
 ; *** no valid date & time ***
-emptySize	EQU	afterIO - empty_head -256	; compute size NOT including header!
+emptySize	EQU	afterIO-empty_head-256		; compute size NOT including header!
 
 ; filesize in top 32 bits NOT including header, new 20161216
 	FDB		emptySize	; filesize

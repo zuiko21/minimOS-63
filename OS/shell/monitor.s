@@ -1,6 +1,6 @@
 ; Monitor shell for minimOS·63 (simple version)
 ; v0.6a3
-; last modified 20170616-1341
+; last modified 20170616-1425
 ; (c) 2017 Carlos J. Santisteban
 
 #include "../usual.h"
@@ -43,7 +43,7 @@ montitle:
 	FDB		$7000		; time, 14.00
 	FDB		$4ACF		; date, 2017/6/15
 
-monSize	EQU	mon_end - mon_head - 256	; compute size NOT including header!
+monSize	EQU	mon_end-mon_head-256	; compute size NOT including header!
 
 ; filesize in top 32 bits NOT including header, new 20161216
 	FDB		monSize		; filesize

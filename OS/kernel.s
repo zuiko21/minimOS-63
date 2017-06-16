@@ -2,7 +2,7 @@
 ; v0.6a6
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170616-1342
+; last modified 20170616-1426
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -47,7 +47,7 @@ kern_splash:
 	FDB		$5800			; time, 11.00
 	FDB		$4ACE			; date, 2017/6/14
 
-kern_siz	EQU kern_end-kern_head-$FF
+kern_siz	EQU kern_end-kern_head-256
 
 	FDB		kern_siz		; kernel size excluding header 
 	FDB		0

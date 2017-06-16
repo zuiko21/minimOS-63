@@ -2,7 +2,7 @@
 ; sort-of generic template
 ; v0.6a5
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170616-1002
+; last modified 20170616-1412
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -36,7 +36,7 @@ fw_mname:
 	FDB		$5800				; time, 11.00
 	FDB		$4ACE				; date, 2017/6/14
 
-fwSize		EQU $10000-fw_start-$FF
+fwSize		EQU $10000-fw_start-256
 
 ; filesize in top 32 bits NOT including header, new 20161216
 	FDB		fwSize				; firmware size excluding header 
@@ -76,11 +76,11 @@ post:
 
 ; *** preset kernel start address (standard label from ROM file) ***
 	LDX #kernel			; get full address
-	STX fw_warm			; store in sysvars, really needed?
+	STX fw_warm			; store in fwvars, really needed?
 
 ; *** preset SWI & NMI handlers ***
-	LDX #swi_routine	; standard routine/label?
-	STX fw_swi			; new sysvar
+	LDX #std_nmi		; default routine just like firmware-supplied NMI
+	STX fw_brk			; new fwvar
 ; as NMI will be validated, no need to preinstall it!
 
 ; *** preset jiffy irq frequency ***
@@ -404,13 +404,17 @@ fw_ctx:
 
 ; ****** some odds ******
 
+; temporary empty memory map
+fw_map:
+	FCB		0
+
 ; if case of no headers, at least keep machine name somewhere
 #ifdef	NOHEAD
 fw_splash:
 	FCC		"0.6 firmware for "
 fw_mname:
 	FCC		MACHINE_NAME
-	FCB 0
+	FCB 	0
 #endif
 
 ; *********************************
