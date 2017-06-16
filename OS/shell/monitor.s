@@ -1,6 +1,6 @@
 ; Monitor shell for minimOS·63 (simple version)
 ; v0.6a3
-; last modified 20170615-1415
+; last modified 20170616-1007
 ; (c) 2017 Carlos J. Santisteban
 
 #include "../usual.h"
@@ -19,11 +19,12 @@
 
 ; ##### include minimOS headers and some other stuff #####
 #ifndef	NOHEAD
-	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF), $FF	; page alignment!!! eeeeek
-mon_head:
+	; standard page alignment for CPP-MASM
+	ORG		*-1&$FF00+$100	; eeeeeek
+on_head:
 ; *** header identification ***
 	FCB		0
-	FCC		"m"			; minimOS app!
+	FCB		'm'			; minimOS app!
 	FCB		CPU_TYPE
 	FCC		"****"		; some flags TBD
 	FCB		CR
@@ -36,7 +37,7 @@ montitle:
 	FCB		0
 
 ; advance to end of header
-	FILL	$FF, mon_head + $F8 - *, $FF	; for ready-to-blow ROM, advance to time/date field
+	FILL	$FF, mon_head+$F8-*		; for ready-to-blow ROM, advance to time/date field
 
 ; *** date & time in MS-DOS format at byte 248 ($F8) ***
 	FDB		$7000		; time, 14.00
