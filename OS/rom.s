@@ -1,7 +1,7 @@
 ; minimOS·63 ROM template
 ; v0.6a1
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170615-1409
+; last modified 20170616-0902
 
 ; create ready-to-blow ROM image
 #define		ROM		_ROM
@@ -14,7 +14,7 @@
 ; ***** ROM contents *****
 ; ************************
 
-	ORG	ROM_BASE			; as defined in options.h
+	ORG	ROM_BASE		; as defined in options.h
 
 ; *** minimOS volume header, new 20150604 ***
 ; not final as current (0.6) LOAD_LINK will not recognise it!
@@ -22,31 +22,31 @@
 
 #ifndef	NOHEAD
 sysvol:
-	FCB	0			; don't enter here! NUL marks beginning of header
-	FCC	"aV"		; minimOS system volume ID, TBD
-	FCC	"****"		; some flags TBD
-	FCB	CR
-	FCC	"sys"		; volume name (mandatory)
-	FCB	0
+	FCB		0			; don't enter here! NUL marks beginning of header
+	FCC		"aV"		; minimOS system volume ID, TBD
+	FCC		"****"		; some flags TBD
+	FCB		CR
+	FCC		"sys"		; volume name (mandatory)
+	FCB		0
 ; *** ROM identification string as comment (highly recommended) ***
-	FCC	"minimOS·63 0.6 for "
-	FCC	MACHINE_NAME					; system version and machine
-	FCB	CR
-	FCC	"20170524-1300"					; build date and time
-	FCB	0
+	FCC		"minimOS·63 0.6 for "
+	FCC		MACHINE_NAME			; system version and machine
+	FCB		CR
+	FCC		"20170616-0857"			; build date and time
+	FCB		0
 
-	FILL	$FF, sysvol + $F8 - *				; for ready-to-blow ROM, advance to time/date field
+	FILL	$FF, (sysvol + $F8 - *)	; for ready-to-blow ROM, advance to time/date field
 
-	FDB		$4800				; time, 9.00
-	FDB		$4ACF				; date, 2017/06/15
+	FDB		$4800		; time, 9.00
+	FDB		$4AD0		; date, 2017/06/16
 
 ;romsize	EQU	$FF00 - ROM_BASE	; compute size! excluding header
 
-;	FDB	romsize				; volume size (for future support)
-;	FDB	0					; ROM size in pages
+;	FDB		romsize		; volume size (for future support)
+;	FDB		0			; ROM size in pages
 ; FAKE file "size" in order to be LOAD_LINK savvy...
-	FDB	0
-	FDB	0				; nothing inside, skip to adjacent header
+	FDB		0
+	FDB		0			; nothing inside, skip to adjacent header
 #endif
 
 ; **************************************
@@ -68,29 +68,29 @@ kernel	EQU * + 256	; skip header
 ; **************************
 ; ### should include a standard header here! ###
 #ifndef	NOHEAD
-	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)		; page alignment!!! eeeeek
+	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)	; page alignment!!! eeeeek
 drv_file:
-	FCB	0
-	FCC	"aD****"					; driver pack file plus flags TBD
-	FCB	CR
-	FCC	"drivers"				; filename and empty comment
-	FDB	0
+	FCB		0
+	FCC		"aD****"	; driver pack file plus flags TBD
+	FCB		CR
+	FCC		"drivers"	; filename and empty comment
+	FDB		0
 
-	FILL	$FF, drv_file + $F8 - *			; padding
+	FILL	$FF, drv_file + $F8 - *		; padding
 
-	FDB	$4800						; time, 09.00
-	FDB	$4ACF						; date, 2017/06/15
+	FDB		$4800		; time, 09.00
+	FDB		$4ACF		; date, 2017/06/15
 
-drv_size	EQU drv_end - drv_file - $100		; exclude header
+drv_size	EQU drv_end - drv_file - $100	; exclude header
 
-	FDB	drv_size
-	FDB	0
+	FDB		drv_size
+	FDB		0
 #endif
 ; ### end of minimOS header ###
 
 ; after header goes the binary blob
 #include	DRIVER_PACK_s
-drv_end:		; for easier size computation
+drv_end:				; for easier size computation
 
 ; *********************************************
 ; *** include rest of the supplied software ***
@@ -106,26 +106,26 @@ drv_end:		; for easier size computation
 ; ****** skip I/O area for more ******
 ; ##### empty header #####
 #ifndef	NOHEAD
-	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)		; page alignment!!! eeeeek
+	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)	; page alignment!!! eeeeek
 empty_head:
-	FCB	0						; don't enter here! NUL marks beginning of header
-	FCC	"aS****"	; just reserved SYSTEM space
-	FCB	CR
-	FCC	"[I/O]"		; file name (mandatory) and empty comment
-	FDB	0
+	FCB		0			; don't enter here! NUL marks beginning of header
+	FCC		"aS****"	; just reserved SYSTEM space
+	FCB		CR
+	FCC		"[I/O]"		; file name (mandatory) and empty comment
+	FDB		0
 ; advance to end of header
-	FILL	$FF, empty_head + $FC - *	; for ready-to-blow ROM, advance to size
+	FILL	$FF, empty_head + $FC - *		; for ready-to-blow ROM, advance to size
 ; *** no valid date & time ***
 emptySize	EQU	afterIO - empty_head -256	; compute size NOT including header!
 
 ; filesize in top 32 bits NOT including header, new 20161216
-	FDB	emptySize		; filesize
-	FDB	0				; 64K space does not use upper 16-bit
+	FDB		emptySize	; filesize
+	FDB		0			; 64K space does not use upper 16-bit
 #endif
 ; ##### end of minimOS header #####
 
 ; *** blank space for I/O area skipping ***
-afterIO		EQU $E000				; assume I/O ends at $DFFF
+afterIO		EQU $E000			; assume I/O ends at $DFFF
 	FILL	$FF, afterIO - *F	; skip I/O and page alignment!!!
 ;	ORG	afterIO					; should be already there
 
@@ -134,27 +134,27 @@ afterIO		EQU $E000				; assume I/O ends at $DFFF
 ; *************************************
 ; ...could add more software up to $FC00
 ;#include "shell/monitor.s"	; SUPPOSEDLY INCLUDED WITHIN KERNEL
-#include "shell/miniMoDA.s"
+;#include "shell/miniMoDA.s"
 
 ; ****** skip rest of unused ROM until firmware ******
 ; ##### empty header #####
 #ifndef	NOHEAD
-	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)		; page alignment!!! eeeeek
+	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)	; page alignment!!! eeeeek
 free_head:
-	FCB	0					; don't enter here! NUL marks beginning of header
-	FCC	"aS****"	; just reserved SYSTEM space
-	FCB	CR
-	FCC	"[R"
-	FCC	"OM]"		; file name (mandatory) and empty comment *** note macro savvy
-	FDB	0
+	FCB		0			; don't enter here! NUL marks beginning of header
+	FCC		"aS****"	; just reserved SYSTEM space
+	FCB		CR
+	FCC		"[R"
+	FCC		"OM]"		; file name (mandatory) and empty comment *** note macro savvy
+	FDB		0
 ; advance to end of header
-	FILL	$FF, free_head + $FC - *	; for ready-to-blow ROM, advance to size
+	FILL	$FF, free_head + $FC - *		; for ready-to-blow ROM, advance to size
 ; *** no valid date & time ***
 freeSize	EQU	FW_BASE - free_head -256	; compute size NOT including header!
 
 ; filesize in top 32 bits NOT including header, new 20161216
-	FDB	freeSize		; filesize
-	FDB	0				; 64K space does not use upper 16-bit
+	FDB		freeSize	; filesize
+	FDB		0			; 64K space does not use upper 16-bit
 #endif
 ; ##### end of minimOS header #####
 
