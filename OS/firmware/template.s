@@ -2,7 +2,7 @@
 ; sort-of generic template
 ; v0.6a5
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170615-0905
+; last modified 20170616-1002
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -13,7 +13,8 @@
 ; *** first some ROM identification ***
 ; this is expected to be loaded at an aligned address anyway
 #ifndef	NOHEAD
-	FILL	$FF, $100*((* & $FF) <> 0) - (* & $FF)	; page alignment!!! eeeeek
+	; standard page alignment for CPP-MASM
+	ORG		*-1&$FF00+$100	; eeeeeek
 fw_start:
 	FCB		0
 	FCB		'm'
@@ -29,13 +30,13 @@ fw_mname:
 	FCB		0
 
 ; advance to end of header
-	FILL	$FF, fw_start + $F8 - *	; padding
+	FILL	$FF, fw_start+$F8-*		; padding
 
 ; *** date & time in MS-DOS format at byte 248 ($F8) ***
 	FDB		$5800				; time, 11.00
 	FDB		$4ACE				; date, 2017/6/14
 
-fwSize		EQU $10000 - fw_start - $FF
+fwSize		EQU $10000-fw_start-$FF
 
 ; filesize in top 32 bits NOT including header, new 20161216
 	FDB		fwSize				; firmware size excluding header 
@@ -98,7 +99,7 @@ res_sec:
 ; ********************************
 ; KERAton has no VIA, jiffy IRQ is likely to be fixed on, perhaps enabling counter input on PIA
 ;	LDAA #$C0			; enable T1 (jiffy) interrupt only
-;	STAA VIA_J + IER
+;	STAA VIA_J+IER
 
 ; **********************************
 ; *** direct print splash string ***
@@ -412,16 +413,10 @@ fw_mname:
 	FCB 0
 #endif
 
-; filling for ready-to-blow ROM
-#ifdef		ROM
-	FILL	$FF, admin_ptr-*
-#endif
-
 ; *********************************
 ; *** administrative JUMP table ***
 ; *********************************
-
-	ORG		admin_ptr
+	ORG		admin_ptr	; must be set in S19 format!
 
 ; generic functions, esp. interrupt related
 	JMP fw_gestalt		; GESTALT get system info (renumbered) @0
@@ -445,17 +440,12 @@ fw_mname:
 
 ; ****** at the NEW standard address $FFC0, this will be at $FFDE ******
 
-; filling for ready-to-blow ROM
-#ifdef	ROM
-	FILL	$FF, lock-*
-#endif
-
 ; *****************************
 ; *** standard ROM inteface ***
 ; *****************************
 
 ; *** panic routine, locks at very obvious address ($FFE1-$FFE2) ***
-* = lock
+	ORG	lock			; must be set in S19 format!
 	SEI					; locks at same address as 6502
 panic_loop:
 		BRA panic_loop		; always OK
@@ -475,17 +465,12 @@ brk_hndl:		; label from vector list
 
 ; $FFED...
 
-; filling for ready-to-blow ROM
-#ifdef	ROM
-	FILL	$FF, $FFEE-*
-#endif
-
 ; **********************************
 ; ****** hardware ROM vectors ******
 ; **********************************
 
 ; *** Hitachi ROM vectors ***
-	ORG		$FFEE		; should be already at it
+	ORG		$FFEE		; must be set in S19 format!
 
 	FDB		nmi			; TRAP	@ $FFEE
 
