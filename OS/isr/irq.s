@@ -1,8 +1,8 @@
 ; ISR for minimOS•63
-; v0.6a1, should match kernel.s
+; v0.6a2, should match kernel.s
 ; features TBD
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170619-2034
+; last modified 20170620-1112
 
 #define		ISR		_ISR
 
@@ -13,9 +13,15 @@
 #ifdef	MC6801
 	LDX systmp			; get this word (4)
 	PSHX				; easily stored (4)
+	LDX sys_sp			; get this word (4)
+	PSHX				; easily stored (4)
 #else
 	LDAA systmp			; get this word (3+3)
 	LDAB systmp+1
+	PSHB				; store similarly (4+4)
+	PSHA
+	LDAA sys_sp			; get this word (3+3)
+	LDAB sys_sp+1
 	PSHB				; store similarly (4+4)
 	PSHA
 #endif
@@ -30,22 +36,34 @@
 ; *** async interrupt otherwise ***
 ; execute D_REQ in drivers, whenever enabled
 ; *** should be rewritten for new 0.6 functionality ***
-	LDAB queues_mx			; get queue size, CHECK OFFSET (4)
+	LDAB queues_mx			; get R-queue size (4)
 		BEQ isr_done			; no drivers to call (4)
-	LDX #drv_async			; otherwise get queue start
+	LDX #drv_r_en			; otherwise get enable array
+	STX sys_sp				; temporary storage
+	LDX #drv_async			; and get R-queue start
 i_req:
 		STX systmp			; keep index! (5+4)
 		PSHB
 ; *** include here disable control in 0.6 ***
-; proceed to call
-		LDX 0,X				; solve indirect (6)
-		JSR 0,X				; call from table (...)
+		LDX sys_sp			; pointer to enable entry
+		LDAA 0,X			; R-entry for this task
+		BPL i_nxreq			; temporarily disabled, skip or...
+; *** proceed to call ***
+			LDX systmp			; pointer to routine queue
+			LDX 0,X				; solve indirect (6)
+			JSR 0,X				; call from table (...)
 i_nxreq:
-		LDX systmp			; restore pointer... (4)
-		INX				; ...to next value (4+4)
-		INX
 		PULB				; restore counter too (4)
-			BCC isr_done			; driver satisfied, thus go away
+			BCC isr_done			; driver satisfied, thus go away (4)
+; *** here comes part from the disable control in 0.6 ***
+		LDX sys_sp			; advance enable queue too! (4+4+4)
+		INX
+		INX
+		STX sys_sp			; needs to be restored (5)
+; *** end of 0.6 extras ***
+		LDX systmp			; restore pointer... (4)
+		INX					; ...to next value (4)
+		INX					; will be saved upon next iteration (4)
 		DECB				; go backwards to be faster! (2)
 		BNE i_req			; until zero is done (4)
 ; go away
@@ -53,12 +71,18 @@ isr_done:
 second:
 #ifdef	MC6801
 	PLX				; retrieve word (5)
-	STX				; easily restored (4)
+	STX sys_sp		; easily restored (4)
+	PLX				; retrieve word (5)
+	STX systmp		; easily restored (4)
 #else
 	PULA				; retrieve word (4+4)
 	PULB
-	STAA				; store (4+4)
-	STAB
+	STAA sys_sp			; store (4+4)
+	STAB sys_sp+1
+	PULA				; retrieve word (4+4)
+	PULB
+	STAA systmp			; store (4+4)
+	STAB systmp+1
 #endif
 	RTI
 
@@ -70,21 +94,37 @@ periodic:
 
 ; execute D_POLL code in drivers
 ; *** should be rewritten for new 0.6 functionality ***
-	LDAB queues_mx+1		; get queue size, CHECK OFFSET (4)
+	LDAB queues_mx+1		; get P-queue size (4)
 		BEQ ip_done			; no drivers to call (4)
-	LDX #drv_poll			; otherwise get queue start
+	LDX #drv_p_en			; otherwise get enable array
+	STX sys_sp				; temporary storage
+	LDX #drv_poll			; and get P-queue start
 i_poll:
 		STX systmp			; keep index! (5+4)
 		PSHB
 ; *** include here disable control in 0.6 ***
+		LDX sys_sp			; pointer to enable entry
+		LDAA 0,X			; R-entry for this task
+			BPL isr_sched_ret	; temporarily disabled, skip or...
 ; *** and frequency setting ***
-; proceed to call
-		LDX 0,X				; solve indirect (6)
-		JSR 0,X				; call from table (...)
+		LDX systmp			; restore queue pointer (4)
+		DEC MAX_QUEUE+1,X	; countdown, note offset (7)
+		BNE i_nxpll			; not yet, save some time, X has systmp
+			DEC MAX_QUEUE, X	; try MSB, must be set +1!!! (7)
+		BNE i_nxpll			; not yet, save some time, X has systmp
+			LDAA irq_freq		; otherwise, counter must be reset!
+			LDAB irq_freq+1
+			INCA				; as required by routine, please take into account on startup!!!
+			STAA MAX_QUEUE, X	; update counter
+			STAB MAX_QUEUE+1, X 
+; *** proceed to call ***
+			LDX 0,X				; solve indirect (6)
+			JSR 0,X				; call from table (...)
 ; *** here is the return point needed for B_EXEC in order to create the stack frame ***
 isr_sched_ret:				; *** take this standard address!!! ***
 		LDX systmp			; restore pointer... (4)
-		INX				; ...to next value (4+4)
+i_nxpll:
+		INX					; ...to next value (4+4)
 		INX
 		PULB				; restore counter too (4)
 		DECB				; go backwards to be faster! (2)
