@@ -1,8 +1,8 @@
 ; ISR for minimOS•63
-; v0.6a2, should match kernel.s
+; v0.6a3, should match kernel.s
 ; features TBD
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170620-1112
+; last modified 20170620-2053
 
 #define		ISR		_ISR
 
@@ -13,53 +13,52 @@
 #ifdef	MC6801
 	LDX systmp			; get this word (4)
 	PSHX				; easily stored (4)
-	LDX sys_sp			; get this word (4)
-	PSHX				; easily stored (4)
+;	LDX sys_sp			; get this word (4)///only if MAX_QUEUES>84
+;	PSHX				; easily stored (4)///
 #else
 	LDAA systmp			; get this word (3+3)
 	LDAB systmp+1
 	PSHB				; store similarly (4+4)
 	PSHA
-	LDAA sys_sp			; get this word (3+3)
-	LDAB sys_sp+1
-	PSHB				; store similarly (4+4)
-	PSHA
+;	LDAA sys_sp			; get this word (3+3)///
+;	LDAB sys_sp+1
+;	PSHB				; store similarly (4+4)///
+;	PSHA
 #endif
 ; *** place here HIGH priority async tasks, if required ***
 
 ; check whether from VIA, BRK...
 ;	_ADMIN(IRQ_SOURCE)		; future, proper way... perhaps offset in X?
-	LDAA VIA+IFR			; have a look at bit 6 (4+2)
+	LDAA VIA+IFR			; have a look at bit 6 (4+2) *** NOT for KERAton
 	ANDA #%01000000
 		BNE periodic		; from T1 (4)
 
 ; *** async interrupt otherwise ***
 ; execute D_REQ in drivers, whenever enabled
-; *** should be rewritten for new 0.6 functionality ***
 	LDAB queues_mx			; get R-queue size (4)
 		BEQ isr_done			; no drivers to call (4)
-	LDX #drv_r_en			; otherwise get enable array
-	STX sys_sp				; temporary storage
+;	LDX #drv_r_en			; otherwise get enable array///
+;	STX sys_sp				; temporary storage///
 	LDX #drv_async			; and get R-queue start
 i_req:
 		STX systmp			; keep index! (5+4)
 		PSHB
 ; *** include here disable control in 0.6 ***
-		LDX sys_sp			; pointer to enable entry
-		LDAA 0,X			; R-entry for this task
+;		LDX sys_sp			; pointer to enable entry///
+		LDAA MAX_QUEUE,X		; R-entry for this task///or 0 if using sys_sp
 		BPL i_nxreq			; temporarily disabled, skip or...
 ; *** proceed to call ***
-			LDX systmp			; pointer to routine queue
+;			LDX systmp			; pointer to routine queue///
 			LDX 0,X				; solve indirect (6)
 			JSR 0,X				; call from table (...)
 i_nxreq:
 		PULB				; restore counter too (4)
 			BCC isr_done			; driver satisfied, thus go away (4)
-; *** here comes part from the disable control in 0.6 ***
-		LDX sys_sp			; advance enable queue too! (4+4+4)
-		INX
-		INX
-		STX sys_sp			; needs to be restored (5)
+; *** here comes part from the disable control in 0.6 ***///
+;		LDX sys_sp			; advance enable queue too! (4+4+4)///
+;		INX
+;		INX
+;		STX sys_sp			; needs to be restored (5)///
 ; *** end of 0.6 extras ***
 		LDX systmp			; restore pointer... (4)
 		INX					; ...to next value (4)
@@ -70,15 +69,15 @@ i_nxreq:
 isr_done:
 second:
 #ifdef	MC6801
-	PLX				; retrieve word (5)
-	STX sys_sp		; easily restored (4)
+;	PLX				; retrieve word (5)///
+;	STX sys_sp		; easily restored (4)///
 	PLX				; retrieve word (5)
 	STX systmp		; easily restored (4)
 #else
-	PULA				; retrieve word (4+4)
-	PULB
-	STAA sys_sp			; store (4+4)
-	STAB sys_sp+1
+;	PULA				; retrieve word (4+4)///
+;	PULB
+;	STAA sys_sp			; store (4+4)///
+;	STAB sys_sp+1
 	PULA				; retrieve word (4+4)
 	PULB
 	STAA systmp			; store (4+4)
@@ -88,7 +87,7 @@ second:
 
 ; *** here goes the periodic interrupt code ***
 periodic:
-	LDAA VIA+T1CL		; acknowledge periodic interrupt!!! (4)
+	LDAA VIA+T1CL		; acknowledge periodic interrupt!!! (4)***NOT for KERAton
 
 ; *** scheduler no longer here, just an optional driver! But could be placed here for maximum performance ***
 
@@ -96,18 +95,18 @@ periodic:
 ; *** should be rewritten for new 0.6 functionality ***
 	LDAB queues_mx+1		; get P-queue size (4)
 		BEQ ip_done			; no drivers to call (4)
-	LDX #drv_p_en			; otherwise get enable array
-	STX sys_sp				; temporary storage
+;	LDX #drv_p_en			; otherwise get enable array///
+;	STX sys_sp				; temporary storage///
 	LDX #drv_poll			; and get P-queue start
 i_poll:
 		STX systmp			; keep index! (5+4)
 		PSHB
 ; *** include here disable control in 0.6 ***
-		LDX sys_sp			; pointer to enable entry
-		LDAA 0,X			; R-entry for this task
+;		LDX sys_sp			; pointer to enable entry///
+		LDAA MAX_QUEUE*3+1,X	; P-entry for this task///or 0 if using sys_sp
 			BPL isr_sched_ret	; temporarily disabled, skip or...
 ; *** and frequency setting ***
-		LDX systmp			; restore queue pointer (4)
+;		LDX systmp			; restore queue pointer (4)///
 		DEC MAX_QUEUE+1,X	; countdown, note offset (7)
 		BNE i_nxpll			; not yet, save some time, X has systmp
 			DEC MAX_QUEUE, X	; try MSB, must be set +1!!! (7)
@@ -116,7 +115,7 @@ i_poll:
 			LDAB irq_freq+1
 			INCA				; as required by routine, please take into account on startup!!!
 			STAA MAX_QUEUE, X	; update counter
-			STAB MAX_QUEUE+1, X 
+			STAB MAX_QUEUE+1, X
 ; *** proceed to call ***
 			LDX 0,X				; solve indirect (6)
 			JSR 0,X				; call from table (...)
