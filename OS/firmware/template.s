@@ -2,7 +2,7 @@
 ; sort-of generic template
 ; v0.6a6
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170621-1211
+; last modified 20170621-1247
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -134,10 +134,15 @@ start_kernel:
 nmi:
 ; registers are saved! but check system pointers
 ; make NMI reentrant *** could use some 6801 optimisation
+#ifdef	MC6801
+	LDX systmp			; get word...
+	PSHX				; ...and keep it
+#else
 	LDAA systmp			; get original word
 	LDAB systmp+1
 	PSHB				; store them in similar order
 	PSHA
+#endif
 ; prepare for next routine
 	LDX fw_nmi			; get vector to supplied routine
 #ifdef	SAFE
@@ -159,10 +164,15 @@ nmi:
 	JSR 4,X				; routine OK, skip magic string!
 ; *** here goes the former nmi_end routine ***
 nmi_end:
+#ifdef	MC6801
+	PULX				; retrieve...
+	STX systmp			; ...and restore
+#else
 	PULA				; retrieve saved vars
 	PULB
 	STAB systmp+1		; restore values
 	STAA systmp
+#endif
 	RTI					; resume normal execution, hopefully
 
 ; *** execute standard NMI handler, if magic string failed ***
@@ -292,6 +302,7 @@ fw_i_src:
 
 ; POWEROFF, poweroff etc
 ; acc B <- mode (0 = suspend, 2 = warmboot, 4 = coldboot, 6 = poweroff)
+; *** might add special codes for SWI/NMI triggering ***
 ; C -> not implemented
 
 fw_power:
@@ -362,6 +373,14 @@ fwi_loop:
 
 fw_patch:
 	_ENTER_CS			; disable interrupts, respects A
+#ifdef	MC6801
+	PSHA				; eeeek
+	LDX #fw_table		; take base address
+	ABX					; destination entry computed!
+	LDD kerntab			; get targeted function pointer
+	STD 0,X				; updated for firmware
+	PULA				; eeeek
+#else
 	ADDB #<fw_table		; compute final LSB
 	STAB systmp+1		; set temporary pointer
 	LDAB #>fw_table		; now for MSB
@@ -372,6 +391,7 @@ fw_patch:
 	STAB 0,X			; store into firmware
 	LDAB kerntab+1		; and LSB
 	STAB 1,X
+#endif
 	_EXIT_CS			; restore interrupts
 	_DR_OK				; done
 
