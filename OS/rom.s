@@ -1,7 +1,7 @@
 ; minimOS·63 ROM template
 ; v0.6a1
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170621-1204
+; last modified 20170621-1312
 
 ; create ready-to-blow ROM image
 #define		ROM		_ROM
@@ -157,7 +157,7 @@ free_head:
 ; ***************************************
 ; *** make separate room for firmware ***
 ; ***************************************
-;	ORG	FW_BASE					; done this way in S19 format!
+	ORG	FW_BASE			; done this way in S19 format!
 
 ; ***********************************
 ; *** hardware-dependent firmware ***

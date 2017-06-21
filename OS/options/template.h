@@ -2,7 +2,7 @@
 ; sort-of-template, possibly KERAton inspired
 ; copy or link as options.h in root dir
 ; (c) 2015-2017 Carlos J. Santisteban
-; last modified 20170621-1213
+; last modified 20170621-1310
 
 ; *** set conditional assembly ***
 
@@ -15,7 +15,7 @@
 ; select type as on executable headers
 
 ; microcontrollers uncomment this
-#define	MC6801		_MC6801
+;#define	MC6801		_MC6801
 ; in case of Hitachi, uncomment this TOO
 ;#define	HD6301		_HD6301
 
@@ -56,7 +56,7 @@
 ROM_BASE	EQU	$8000	; KERAton
 
 ; ** position of firmware, usually skipping I/O area **
-FW_BASE		EQU	$E000	; standard value
+FW_BASE		EQU	$F800	; restricted value
 
 
 ; ** I/O definitions **
