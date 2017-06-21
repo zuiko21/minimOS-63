@@ -2,7 +2,7 @@
 ; v0.6a3, should match kernel.s
 ; features TBD
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170620-2053
+; last modified 20170621-1037
 
 #define		ISR		_ISR
 
@@ -109,13 +109,13 @@ i_poll:
 ;		LDX systmp			; restore queue pointer (4)///
 		DEC MAX_QUEUE+1,X	; countdown, note offset (7)
 		BNE i_nxpll			; not yet, save some time, X has systmp
-			DEC MAX_QUEUE, X	; try MSB, must be set +1!!! (7)
+			DEC MAX_QUEUE,X		; try MSB, must be set +1!!! (7)
 		BNE i_nxpll			; not yet, save some time, X has systmp
 			LDAA irq_freq		; otherwise, counter must be reset!
 			LDAB irq_freq+1
 			INCA				; as required by routine, please take into account on startup!!!
-			STAA MAX_QUEUE, X	; update counter
-			STAB MAX_QUEUE+1, X
+			STAA MAX_QUEUE,X	; update counter
+			STAB MAX_QUEUE+1,X
 ; *** proceed to call ***
 			LDX 0,X				; solve indirect (6)
 			JSR 0,X				; call from table (...)

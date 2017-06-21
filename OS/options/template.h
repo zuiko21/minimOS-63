@@ -2,13 +2,13 @@
 ; sort-of-template, possibly KERAton inspired
 ; copy or link as options.h in root dir
 ; (c) 2015-2017 Carlos J. Santisteban
-; last modified 20170614-1355
+; last modified 20170621-1038
 
 ; *** set conditional assembly ***
 
 ; comment for optimized code without optional checks
 #define		SAFE			_SAFE
-#define		LOWRAM			_LOWRAM
+;#define		LOWRAM			_LOWRAM
 ;#define		NOHEAD			_NOHEAD
 
 ; *** machine specific info ***
@@ -51,10 +51,10 @@ FW_BASE		EQU	$E000	; standard value
 IO_BASE		EQU	$7F00	; possible 16K area is $4000-$7FFF
 
 ; generic address declaration
-PIA			EQU	IO_BASE + $C0	; Use A4-5 on CS0-1, ¬IO.¬Y3 as ¬CS2
-
+PIA			EQU	IO_BASE+$C0		; Use A4-5 on CS0-1, ¬IO.¬Y3 as ¬CS2
+VIA			EQU	IO_BASE+$F0		; ***placeholder only***
 ; * KERAton 2651 ACIA address *
-ACIA		EQU	IO_BASE + $B0	; ACIA address ($80-$BF) from ¬IO.¬Y2
+ACIA		EQU	IO_BASE+$B0		; ACIA address ($80-$BF) from ¬IO.¬Y2
 
 ; with above devices, $00-$7F and $D0-$FF are free IO
 

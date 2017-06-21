@@ -2,7 +2,7 @@
 ; sort-of generic template
 ; v0.6a5
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170616-1412
+; last modified 20170621-1105
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -36,10 +36,8 @@ fw_mname:
 	FDB		$5800				; time, 11.00
 	FDB		$4ACE				; date, 2017/6/14
 
-fwSize		EQU $10000-fw_start-256
-
 ; filesize in top 32 bits NOT including header, new 20161216
-	FDB		fwSize				; firmware size excluding header 
+	FDB		$10000-fw_start-256	; firmware size excluding header 
 	FDB		0					; 64K space does not use upper 16-bit
 ; *** end of standard header ***
 #endif

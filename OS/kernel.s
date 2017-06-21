@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel
-; v0.6a6
+; v0.6a7
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170616-1426
+; last modified 20170621-1105
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -39,7 +39,7 @@ kern_head:
 	FCC		"kernel"		; filename
 	FCB		0
 kern_splash:
-	FCC		"minimOS·63 0.6a6"	; version in comment
+	FCC		"minimOS·63 0.6a7"	; version in comment
 	FCB		0
 
 	FILL	$FF, kern_head+$F8-*		; padding
@@ -47,9 +47,7 @@ kern_splash:
 	FDB		$5800			; time, 11.00
 	FDB		$4ACE			; date, 2017/6/14
 
-kern_siz	EQU kern_end-kern_head-256
-
-	FDB		kern_siz		; kernel size excluding header 
+	FDB		kern_end-kern_head-256		; kernel size excluding header 
 	FDB		0
 #endif
 
@@ -77,6 +75,11 @@ warm:
 	LDX #k_isr			; get address (3)
 	STX ex_pt			; no need to know about actual vector location (5)
 	_ADMIN(SET_ISR)		; install routine
+
+; install SWI code (as defined in "isr/swi.s" below)
+	LDX #k_swi			; get address (3)
+	STX ex_pt			; no need to know about actual vector location (5)
+	_ADMIN(SET_BRK)		; install routine
 
 ; Kernel no longer supplies default NMI, but could install it otherwise
 
@@ -114,7 +117,7 @@ ram_init:
 ; clear some bytes
 	CLRB				; reset driver index (2)
 	STAB queues_mx		; reset all indexes, faster than CLR (5+5)
-	STAB queues_mx+1
+	STAB queues_mx+1	; not worth doing LDX#/STX as same bytes and only one cycle faster
 
 #ifdef LOWRAM
 ; ------ low-RAM systems have no direct tables to reset ------
@@ -380,6 +383,7 @@ dr_eol:
 			BSR dr_nextq		; and advance to next! (frequency) (8+40, 8+28 MCU)
 ; the currently pointed word is freq value, just copy it into currently pointed queue
 			BSR dr_itask		; install entry into queue, no need to advance (8+35, 8+23 MCU)
+			INC 0,X				; *** increment MSB as expected by ISR implementation ***
 ; P-queue is done, let us go to simpler R-queue
 dr_notpq:
 		ASL dr_aut			; extract MSB (now is A_REQ) (6)
@@ -484,6 +488,7 @@ dr_itask:
 	STAA 0,X			; store fetched task pointer (6)
 	STAB 1,X			; LSB too (6+5)
 #endif
+; in any case, exits with X pointing as dq_ptr *** needed after freq setting
 ; write pointer into queue
 	RTS
 
@@ -567,12 +572,12 @@ ks_cr:
 ; ***********************************************
 ; *** generic kernel routines, separate files ***
 ; ***********************************************
-#ifndef		LOWRAM
+;#ifndef		LOWRAM
 	FCC		"<API>"		; debug only
-#include "api.s"
-#else
+;#include "api.s"
+;#else
 #include "api_lowram.s"
-#endif
+;#endif
 
 ; *********************************
 ; *** interrupt service routine ***
@@ -589,7 +594,7 @@ k_swi:
 ; in headerless builds, keep at least the splash string
 #ifdef	NOHEAD
 kern_splash:
-	FCC		"minimOS·63 0.6a6"
+	FCC		"minimOS·63 0.6a7"
 	FCB		0
 #endif
 
@@ -628,6 +633,6 @@ sysvars:
 #include "sysvars.h"
 ; driver-specific system variables, located here 20170207
 dr_vars:
-#include "drivers/config/DRIVER_PACK.h"
+#include	DRIVER_PACK_h
 user_sram:				; the rest of available SRAM
 #endif

@@ -1,6 +1,6 @@
 ; minimOS·63 zeropage
-; v0.6a5
-; last modified 20170614-1234
+; v0.6a6
+; last modified 20170621-1113
 ; MASM compliant 20170614
 
 	ORG		0
@@ -99,6 +99,7 @@ local3:
 locpt3		RMB 4	; variables for kernel functions @ $EC
 
 loc_str		EQU rh_scan+2	; temporary string pointer
+dr_iopt		EQU dte_ptr+2	; temporary IO pointer
 
 ; ***********************
 ; ** kernel parameters **

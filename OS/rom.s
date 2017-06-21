@@ -1,7 +1,7 @@
 ; minimOS·63 ROM template
 ; v0.6a1
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170616-1431
+; last modified 20170621-1108
 
 ; create ready-to-blow ROM image
 #define		ROM		_ROM
@@ -40,10 +40,8 @@ sysvol:
 	FDB		$4800		; time, 9.00
 	FDB		$4AD0		; date, 2017/06/16
 
-;romsize	EQU	$FF00 - ROM_BASE	; compute size! excluding header
-
-;	FDB		romsize		; volume size (for future support)
-;	FDB		0			; ROM size in pages
+;	FDB		$FF00-ROM_BASE			; volume size (for future support)
+;	FDB		0						; ROM size in pages
 ; FAKE file "size" in order to be LOAD_LINK savvy...
 	FDB		0
 	FDB		0			; nothing inside, skip to adjacent header
@@ -82,9 +80,7 @@ drv_file:
 	FDB		$4800		; time, 09.00
 	FDB		$4ACF		; date, 2017/06/15
 
-drv_size	EQU drv_end - drv_file - $100	; exclude header
-
-	FDB		drv_size
+	FDB		drv_end-drv_file-$100
 	FDB		0
 #endif
 ; ### end of minimOS header ###
@@ -108,7 +104,7 @@ drv_end:				; for easier size computation
 ; ##### empty header #####
 #ifndef	NOHEAD
 	; standard page alignment for CPP-MASM
-	ORG		*-1&$FF00+$100	; eeeeeek
+	ORG		*-1&$FF00+$100			; eeeeeek
 empty_head:
 	FCB		0			; don't enter here! NUL marks beginning of header
 	FCC		"aS****"	; just reserved SYSTEM space
@@ -116,19 +112,18 @@ empty_head:
 	FCC		"[I/O]"		; file name (mandatory) and empty comment
 	FDB		0
 ; advance to end of header
-	FILL	$FF, empty_head+$FC-*			; for ready-to-blow ROM, advance to size
-; *** no valid date & time ***
-emptySize	EQU	afterIO-empty_head-256		; compute size NOT including header!
+	FILL	$FF, empty_head+$FC-*	; for ready-to-blow ROM, advance to size
 
+; *** no valid date & time ***
 ; filesize in top 32 bits NOT including header, new 20161216
-	FDB		emptySize	; filesize
-	FDB		0			; 64K space does not use upper 16-bit
+	FDB		afterIO-empty_head-256	; filesize
+	FDB		0						; 64K space does not use upper 16-bit
 #endif
 ; ##### end of minimOS header #####
 
 ; *** blank space for I/O area skipping ***
-afterIO		EQU $E000			; assume I/O ends at $DFFF
-	ORG		afterIO				; OK to do this way in S19 format!
+afterIO		EQU $E000	; assume I/O ends at $DFFF
+	ORG		afterIO		; OK to do this way in S19 format!
 
 ; *************************************
 ; ****** more software after I/O ******
@@ -150,13 +145,12 @@ free_head:
 	FCC		"OM]"		; file name (mandatory) and empty comment *** note macro savvy
 	FDB		0
 ; advance to end of header
-	FILL	$FF, free_head+$FC-*			; for ready-to-blow ROM, advance to size
-; *** no valid date & time ***
-freeSize	EQU	FW_BASE - free_head -256	; compute size NOT including header!
+	FILL	$FF, free_head+$FC-*	; for ready-to-blow ROM, advance to size
 
+; *** no valid date & time ***
 ; filesize in top 32 bits NOT including header, new 20161216
-	FDB		freeSize	; filesize
-	FDB		0			; 64K space does not use upper 16-bit
+	FDB		FW_BASE-free_head-256	; filesize
+	FDB		0						; 64K space does not use upper 16-bit
 #endif
 ; ##### end of minimOS header #####
 
