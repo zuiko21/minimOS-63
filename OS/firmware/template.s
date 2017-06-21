@@ -1,8 +1,8 @@
 ; firmware for minimOS·63
 ; sort-of generic template
-; v0.6a5
+; v0.6a6
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170621-1105
+; last modified 20170621-1211
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -24,7 +24,7 @@ fw_start:
 	FCC		"boot"				; mandatory filename for firmware
 	FCB		0
 fw_splash:
-	FCC		"0.6 firmware for "	; version in comment
+	FCC		"0.6a6 firmware for "	; version in comment
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB		0
@@ -385,10 +385,12 @@ fw_ctx:
 ; these functions will not work on 128-byte systems!
 fw_install:
 ; *** limited version ***
+#ifdef	SAFE
 ; no CS as STX is atomic!
 	LDX kerntab			; the supplied table will be pointed...
 	STX kern_ptr		; ...from the standard address
 	_DR_OK				; done
+#endif
 
 fw_patch:
 fw_ctx:
@@ -409,7 +411,7 @@ fw_map:
 ; if case of no headers, at least keep machine name somewhere
 #ifdef	NOHEAD
 fw_splash:
-	FCC		"0.6 firmware for "
+	FCC		"0.6a6 firmware for "
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB 	0

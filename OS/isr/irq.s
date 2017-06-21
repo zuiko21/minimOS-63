@@ -2,7 +2,7 @@
 ; v0.6a3, should match kernel.s
 ; features TBD
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170621-1037
+; last modified 20170621-1218
 
 #define		ISR		_ISR
 
@@ -69,9 +69,9 @@ i_nxreq:
 isr_done:
 second:
 #ifdef	MC6801
-;	PLX				; retrieve word (5)///
+;	PULX			; retrieve word (5)///
 ;	STX sys_sp		; easily restored (4)///
-	PLX				; retrieve word (5)
+	PULX			; retrieve word (5)
 	STX systmp		; easily restored (4)
 #else
 ;	PULA				; retrieve word (4+4)///
