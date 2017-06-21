@@ -1,7 +1,7 @@
 ; minimOS·63 ROM template
 ; v0.6a1
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170621-1108
+; last modified 20170621-1204
 
 ; create ready-to-blow ROM image
 #define		ROM		_ROM
@@ -41,7 +41,7 @@ sysvol:
 	FDB		$4AD0		; date, 2017/06/16
 
 ;	FDB		$FF00-ROM_BASE			; volume size (for future support)
-;	FDB		0						; ROM size in pages
+;	FDB		0						; 64k only
 ; FAKE file "size" in order to be LOAD_LINK savvy...
 	FDB		0
 	FDB		0			; nothing inside, skip to adjacent header

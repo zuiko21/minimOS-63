@@ -1,6 +1,6 @@
-; minimOS·63 0.6a4 MACRO definitions
+; minimOS·63 0.6a5 MACRO definitions
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170616-0809
+; last modified 20170621-1206
 ; adapted to MASM 20170614
 
 ; **************************
@@ -28,16 +28,16 @@ lock		EQU	$FFE0	; just after the above
 ; * all the same, keep all names for 65xx easier porting *
 ; for kernel API
 #define		_EXIT_OK	CLC: RTS
-#define		_ERR(a)		LDAB #(a): SEC: RTS
+#define		_ERR(a)		LDAB #0+a: SEC: RTS
 
 ; for apps
 #define		_FINISH		CLC: RTS
-#define		_ABORT(a)	LDAB #(a): SEC: RTS
+#define		_ABORT(a)	LDAB #0+a: SEC: RTS
 
 ; for most code, incl. drivers
 ; such code without error signaling (eg. shutdown, jiffy interrupt) may just end on RTS no matter the CPU
 #define		_DR_OK		CLC: RTS
-#define		_DR_ERR(a)	LDAB #(a): SEC: RTS
+#define		_DR_ERR(a)	LDAB #0+a: SEC: RTS
 
 ; *** special functions ***
 ; new exit for asynchronous driver routines when not satisfied
