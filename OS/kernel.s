@@ -2,7 +2,7 @@
 ; v0.6a7
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170621-1105
+; last modified 20170621-1235
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -101,9 +101,13 @@ warm:
 	BEQ ram_init		; nothing to align (4)
 		INCA				; otherwise start at next page (2)
 ram_init:
+	LDAB #SRAM			; number of SRAM pages as defined in options.h (2) *** revise
+#ifdef	MC6801
+	STD ram_pos			; full free RAM start address (5)
+#else
 	STAA ram_pos		; store it, this is PAGE number (5)
-	LDAA #SRAM			; number of SRAM pages as defined in options.h (2) *** revise
-	STAA ram_pos+1		; store second entry and we are done! (5)
+	STAB ram_pos+1		; store second entry and we are done! (5)
+#endif
 ; ++++++
 #endif
 
@@ -461,12 +465,6 @@ dr_next:
 		INX					; eeeeeeeek! pointer arithmetic! (4)
 		JMP dr_loop			; go for next (3)
 
-; ***************************
-; *** points of no return ***
-; ***************************
-dr_error:
-	_DR_ERR(N_FOUND)	; standard exit for non-existing drivers!
-
 ; *****************************************
 ; *** some driver installation routines ***
 ; *****************************************
@@ -569,8 +567,14 @@ ks_cr:
 	_KERNEL(COUT)		; print it
 	RTS
 
+; ***************************
+; *** points of no return ***
+; ***************************
+dr_error:
+	_DR_ERR(N_FOUND)	; standard exit for non-existing drivers!
+
 ; ***********************************************
-; *** generic kernel routines, separate files ***
+; *** generic kernel routines, separate files *** not yet implemented
 ; ***********************************************
 ;#ifndef		LOWRAM
 	FCC		"<API>"		; debug only
