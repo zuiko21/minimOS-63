@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
-; v0.6a4
+; v0.6a5
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170614-1402
+; last modified 20170621-1228
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -73,12 +73,18 @@ cio_dev:
 	NEGA				; driver countdown will be subtracted! (2)
 	ADDA drv_num		; compute driver position in list (3)
 	ASLA				; two times is offset LSB for drivers_ad list (2)
+#ifdef	MC6801
+	TAB					; get offset here (2)
+	LDX #drivers_ad		; base address (3)
+	ABX					; done! (3)
+#else
 	ADDA #<drivers_ad	; take table LSB (2)
 	LDAB #>drivers_ad	; same for MSB (2)
 	ADCB #0				; propagate carry (2)
 	STAB da_ptr			; store pointer to list entry (4+4)
 	STAA da_ptr+1
 	LDX da_ptr			; use as base index (4)
+#endif
 	LDX 0,X				; now X holds the header address (6)
 ; here must jump to appropriate driver routine
 #ifdef	MC6801
@@ -556,7 +562,7 @@ rl_cr:
 ; *******TO BE REVISED*********
 set_fg:
 ; *** preliminary 6800 code ***
-/*	LDAA VIA+ACR		; get current configuration (4)
+	LDAA VIA+ACR		; get current configuration (4)
 	LDX VIA+T1LL		; get older T1 latch values (5)
 	STX old_t1			; save them (5)
 ; *** TO_DO - should compare old and new values in order to adjust quantum size accordingly ***
@@ -578,7 +584,7 @@ fg_dis:
 	LDX old_t1			; older T1L (4)
 	STX VIA+T1LL		; restore old value, supposed to be running already (6)
 ; *** TO_DO - restore standard quantum ***
-	BRA fg_exit			; usual ending (4)*/
+	BRA fg_exit			; usual ending (4)
 fg_busy:
 	_ERR(BUSY)			; couldn't set (9)
 
@@ -643,13 +649,6 @@ sd_fw:
 ; *** end of kernel functions ***
 ; *******************************
 
-; *******************************
-; *** other data and pointers ***
-; *******************************
-
-; ****************************
-; *** end of kernel tables ***
-; ****************************
 
 ; **************************************************
 ; *** JUMP table, if not in separate 'jump' file ***
