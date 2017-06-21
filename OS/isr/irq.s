@@ -1,8 +1,8 @@
 ; ISR for minimOS•63
-; v0.6a3, should match kernel.s
+; v0.6a4, should match kernel.s
 ; features TBD
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170621-1218
+; last modified 20170621-1356
 
 #define		ISR		_ISR
 
@@ -107,15 +107,15 @@ i_poll:
 			BPL isr_sched_ret	; temporarily disabled, skip or...
 ; *** and frequency setting ***
 ;		LDX systmp			; restore queue pointer (4)///
-		DEC MAX_QUEUE+1,X	; countdown, note offset (7)
+		DEC MAX_QUEUE*4+1,X	; countdown, note offset (7) eeeeeeeeeek
 		BNE i_nxpll			; not yet, save some time, X has systmp
-			DEC MAX_QUEUE,X		; try MSB, must be set +1!!! (7)
+			DEC MAX_QUEUE*4,X	; try MSB, must be set +1!!! (7) eeeeeeeek
 		BNE i_nxpll			; not yet, save some time, X has systmp
-			LDAA irq_freq		; otherwise, counter must be reset!
-			LDAB irq_freq+1
-			INCA				; as required by routine, please take into account on startup!!!
-			STAA MAX_QUEUE,X	; update counter
-			STAB MAX_QUEUE+1,X
+			LDAA MAX_QUEUE,X	; otherwise, counter must be reset! ***eeeeeeeeek
+			LDAB MAX_QUEUE+1,X
+; note that MSB stored in drv_freq is already INCreased by kernel!
+			STAA MAX_QUEUE*4,X	; update counter ***eeeeeeeeeeek
+			STAB MAX_QUEUE*4+1,X
 ; *** proceed to call ***
 			LDX 0,X				; solve indirect (6)
 			JSR 0,X				; call from table (...)

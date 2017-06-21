@@ -2,7 +2,7 @@
 ; v0.6a7
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170621-1235
+; last modified 20170621-1411
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -388,6 +388,11 @@ dr_eol:
 ; the currently pointed word is freq value, just copy it into currently pointed queue
 			BSR dr_itask		; install entry into queue, no need to advance (8+35, 8+23 MCU)
 			INC 0,X				; *** increment MSB as expected by ISR implementation ***
+; ...but copy too into drv_count! eeeeeeeeeeeeeeeeeeek
+			LDAB 0,X			; get original MSB (increased)
+			STAB MAX_QUEUE*4,X	; ...and preset counters!!!
+			LDAB 1,X			; same for LSB
+			STAB MAX_QUEUE*4+1,X
 ; P-queue is done, let us go to simpler R-queue
 dr_notpq:
 		ASL dr_aut			; extract MSB (now is A_REQ) (6)

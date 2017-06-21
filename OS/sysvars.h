@@ -1,6 +1,6 @@
-; minimOS·63 0.6a1 System Variables
+; minimOS·63 0.6a2 System Variables
 ; (c) 2012-2017 Carlos J. Santisteban
-; last modified 20170621-1052
+; last modified 20170621-1354
 
 ; **** I/O management ****
 ; ** pointer tables for drivers, new order suggested for alternative version **
@@ -28,6 +28,7 @@ drv_freq	RMB MAX_QUEUE		; array of periodic task frequencies (word?)
 drv_async	RMB MAX_QUEUE		; space for async task pointers
 drv_r_en	RMB MAX_QUEUE		; interleaved array of async interrupt task flags
 drv_p_en	EQU drv_r_en+1		; ditto for periodic tasks (interleaved)
+drv_count	RMV	MAX_QUEUE		; eeeeeeeeeeeeeeeeeeeeek
 
 ; *** single-task sigterm handler separate again! ***
 ; multitasking should provide appropriate space!
