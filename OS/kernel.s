@@ -206,13 +206,13 @@ dr_phys:
 		BCC dr_nptsk		; skip verification if task not enabled (4)
 			LDAB queues_mx+1	; get current tasks in P queue (4)
 			CMPB #MAX_QUEUE		; room for another? (2)
-				BCS dr_nabort		; if not, just abort! (4)
+				BCC dr_nabort		; if not, just abort! (4)
 dr_nptsk:
 		ASLA				; extract MSb (now is A_REQ) (2)
 		BCC dr_nrtsk		; skip verification if task not enabled (4)
 			LDAB queues_mx		; get current tasks in R queue (4)
 			CMPB #MAX_QUEUE		; room for another? (2)
-				BCS dr_nabort		; did not check OK (4)
+				BCC dr_nabort		; did not check OK (4)
 dr_nrtsk:
 ; if arrived here, there is room for interrupt tasks, but check init code
 #ifdef	SAFE
