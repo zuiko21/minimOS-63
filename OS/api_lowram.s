@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
 ; v0.6a5
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170621-1228
+; last modified 20170622-1223
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -530,7 +530,7 @@ rl_rcv:
 			BRA rl_echo			; and resume operation (4)
 rl_nbs:
 		CMPB ln_siz			; overflow? EEEEEEEEEEK (3)
-			BCS rl_l			; ignore if so (4)
+			BCC rl_l			; ignore if so (4)
 		STAA 0,X			; store into buffer (6)
 		INC	rl_cur			; update indexes (6+4)
 		INX
