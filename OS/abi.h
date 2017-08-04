@@ -1,7 +1,7 @@
-; minimOS·63 0.6a2 API/ABI
+; minimOS·63 0.6a3 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170614-1229
+; last modified 20170804-1744
 ; MASM compliant 20170614
 
 ; *************************************************
@@ -11,30 +11,36 @@
 ; *************************************************
 
 ; basic I/O
-COUT		EQU   0	; character output
-CIN			EQU   3	; character input
-STRING		EQU   6	; output a C-string
-READLN		EQU   9	; read input into supplied buffer
+COUT		EQU	0		; character output
+CIN			EQU	COUT+3	; character input
+STRING		EQU	CIN+3		; output a C-string
+READLN		EQU	STRING+3	; read input into supplied buffer
+
+; new block I/O
+BOUT		EQU	READLN+3	; block output
+BLIN		EQU	BOUT+3		; block input
+B_CNFG		EQU	BLIN+3		; device configuration
+B_STAT		EQU	B_CNFG+3	; device status
 
 ; basic windowing system
-OPEN_W		EQU  12	; open window or get I/O devices
-CLOSE_W		EQU  15	; close a window or release device and its buffer
-FREE_W		EQU  18	; release a window but let it on screen, keeping its buffer, may be closed by kernel
+OPEN_W		EQU	B_STAT+3	; open window or get I/O devices
+CLOSE_W		EQU	OPEN_W+3	; close a window or release device and its buffer
+FREE_W		EQU	CLOSE_W+3	; release a window but let it on screen, keeping its buffer, may be closed by kernel
 
 ; other generic functions
-UPTIME		EQU  21	; give uptime in ticks and seconds
-SET_FG		EQU  24	; set PB7 frequency generator ***firmware implementation
-SHUTDOWN	EQU  27	; proper shutdown, with or without power-off ***might be used for NMI/SWI invocation
-LOAD_LINK	EQU  30	; get an executable from its path, and get it loaded into primary memory, maybe relocated
+UPTIME		EQU	FREE_W+3	; give uptime in ticks and seconds
+SET_FG		EQU	UPTIME+3	; set frequency generator ***firmware implementation
+SHUTDOWN	EQU	SET_FG+3	; proper shutdown, with or without power-off ***might be used for NMI/SWI invocation
+LOAD_LINK	EQU	SHUTDOWN+3	; get an executable from its path, and get it loaded into primary memory, maybe relocated
 
 ; mainly for multitasking use, but also for simplified single task management
-B_FORK		EQU  33	; reserve a free braid
-B_EXEC		EQU  36	; get code at some address running into a previously reserved braid
-B_SIGNAL	EQU  39	; send UNIX_like signal to a braid
-B_STATUS	EQU  42	; get execution flags of a braid
-GET_PID		EQU  45	; get current braid PID
-SET_HNDL	EQU  48	; set SIGTERM handler
-B_YIELD		EQU  51	; give away CPU time, not really needed but interesting anyway
+B_FORK		EQU	LOAD_LINK+3	; reserve a free braid
+B_EXEC		EQU	B_FORK+3	; get code at some address running into a previously reserved braid
+B_SIGNAL	EQU	B_EXEC+3	; send UNIX_like signal to a braid
+B_STATUS	EQU	B_SIGNAL+3	; get execution flags of a braid
+GET_PID		EQU	B_STATUS+3	; get current braid PID
+SET_HNDL	EQU	GET_PID+3	; set SIGTERM handler
+B_YIELD		EQU	SET_HNDL+3	; give away CPU time, not really needed but interesting anyway
 
 ; some new functionalities, perhaps OK with LOWRAM systems
 AQ_MANAGE	EQU  54	; get asyncronous task status, or enable/disable it!
