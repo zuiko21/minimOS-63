@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
-; v0.6a5
+; v0.6a6
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170622-1223
+; last modified 20170805-1152
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -23,6 +23,8 @@ set_curr:
 ; *** FUTURE IMPLEMENTATION ***
 aqmanage:
 pqmanage:
+dr_install:
+dr_shutdown:
 
 	_ERR(UNAVAIL)		; go away!
 
@@ -39,8 +41,24 @@ pqmanage:
 cio_of		EQU dr_id	; parameter switching between CIN and COUT, must leave da_ptr clear!
 
 cout:
+
+; **************************
+; *** BOUT, block output ***
+; **************************
+;		INPUT
+; acc B		= dev
+; bl_ptr	= pointer to block
+; bl_siz	= block size
+;		OUTPUT
+; C 		= I/O error
+;		USES da_ptr, dr_id, plus whatever the driver takes
+
+cio_of		EQU dr_id	; parameter switching between BLIN and BOUT, must leave da_ptr clear!
+
+blout:
+
 #ifdef	MC6801
-	LDAA #D_COUT		; offset to be added (2)
+	LDAA #D_BOUT		; offset to be added (2)
 	STAA cio_of			; store safely (4)
 #else
 	CLR cio_of			; zero indicates COUT (6)
@@ -48,8 +66,8 @@ cout:
 	TSTB				; for indexed comparisons (2)
 	BNE co_port			; not default (4)
 		LDAB stdout			; default output device (3)
-	BNE co_port			; eeeeeeeeeek (4)
-		LDAB #DEVICE		; *** somewhat ugly hack *** (2)
+		BNE co_port			; eeeeeeeeeek (4)
+			LDAB #DEVICE		; *** somewhat ugly hack *** (2)
 co_port:
 	BMI cio_phys		; not a logic device (4)
 ; no need to check for windows or filesystem
@@ -663,6 +681,11 @@ k_vec:
 	JMP	cin				; get a character
 	JMP	string			; prints a C-string
 	JMP	readLN			; buffered input
+; block-oriented I/O
+	JMP	blout			; standard block output
+	JMP	blin			; standard block input
+	JMP	dev_config		; device configuration
+	JMP	dev_status		; device status
 ; simple windowing system (placeholders)
 	JMP	open_w			; get I/O port or window
 	JMP	close_w			; close window
@@ -683,8 +706,10 @@ k_vec:
 ; new functionalities TBD
 	JMP	aqmanage		; manage asynchronous task queue
 	JMP	pqmanage		; manage periodic task queue
-; *** unimplemented functions ***
+; *** unimplemented functions in LOWRAM systems ***
 #ifdef	SAFE
+	JMP	dr_install		; install driver
+	JMP	dr_shutdown		; shutdown driver
 	JMP	malloc			; reserve memory
 	JMP	memlock			; reserve some address
 	JMP	free			; release memory
