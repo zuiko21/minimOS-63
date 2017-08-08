@@ -1,6 +1,6 @@
 ; Monitor shell for minimOS·63 (simple version)
-; v0.6a3
-; last modified 20170621-1106
+; v0.6a4
+; last modified 20170808-2343
 ; (c) 2017 Carlos J. Santisteban
 
 #include "../usual.h"
@@ -33,7 +33,7 @@ mon_head:
 montitle:
 	FCC		"monitor"	; file name (mandatory)
 	FCB		0
-	FCC		"for MC6800 and later!"	; comment
+	FCC		"v0.6 for MC6800 and later!"	; comment
 	FCB		0
 
 ; advance to end of header
