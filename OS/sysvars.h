@@ -1,6 +1,7 @@
-; minimOS·63 0.6a2 System Variables
+; minimOS·63 0.6a3 System Variables
 ; (c) 2012-2017 Carlos J. Santisteban
-; last modified 20170621-1412
+; last modified 20170808-2120
+; shorter names 20170808
 
 ; **** I/O management ****
 ; ** pointer tables for drivers, new order suggested for alternative version **
@@ -9,7 +10,7 @@ drv_opt		RMB 256				; full page of output driver pointers, new direct scheme 160
 drv_ipt		RMB 256				; full page of input driver pointers, new direct scheme 160406
 #else
 drv_num		FCB 0				; number of installed drivers
-drivers_id	RMB MAX_DRIVERS		; space for reasonable number of drivers
+drvrs_id	RMB MX_DRVRS			; space for reasonable number of drivers
 #endif
 
 ; ** I/O flags and locks **
@@ -22,13 +23,13 @@ cin_mode	RMB	1				; only this for low ram systems
 #endif
 
 ; **** interrupt queues **** new format 20170518
-queues_mx	RMB 2				; array with max offset for both Periodic[1] & Async[0] queues
-drv_poll	RMB MAX_QUEUE		; space for periodic task pointers
-drv_freq	RMB MAX_QUEUE		; array of periodic task frequencies (word?)
-drv_async	RMB MAX_QUEUE		; space for async task pointers
-drv_r_en	RMB MAX_QUEUE		; interleaved array of async interrupt task flags
+queue_mx	RMB 2				; array with max offset for both Periodic[1] & Async[0] queues
+drv_poll	RMB MX_QUEUE		; space for periodic task pointers
+drv_freq	RMB MX_QUEUE		; array of periodic task frequencies (word?)
+drv_asyn	RMB MX_QUEUE		; space for async task pointers
+drv_r_en	RMB MX_QUEUE		; interleaved array of async interrupt task flags
 drv_p_en	EQU drv_r_en+1		; ditto for periodic tasks (interleaved)
-drv_count	RMB	MAX_QUEUE		; eeeeeeeeeeeeeeeeeeeeek
+drv_cnt		RMB MX_QUEUE		; eeeeeeeeeeeeeeeeeeeeek
 
 ; *** single-task sigterm handler separate again! ***
 ; multitasking should provide appropriate space!
@@ -49,13 +50,13 @@ irq_freq	FDB	200		; IRQs per second (originally set from options.h)
 ticks		RMB	6		; second fraction in jiffy IRQs, then approximate uptime in seconds (2+4 bytes) new format 161006
 sd_flag		RMB	1		; default task upon no remaining braids! 160408
 #ifndef	LOWRAM
-default_in	RMB	1		; GLOBAL default devices, EXCEPT for LOWRAM systems
-default_out	RMB	1
+dflt_in		RMB	1		; GLOBAL default devices, EXCEPT for LOWRAM systems
+dflt_out	RMB	1
 ; no way for multitasking in LOWRAM systems
 run_pid		FCB	0		; current PID running for easy kernel access, will be set by new SET_CURR
 #else
-default_in	EQU std_in	; in LOWRAM systems, both global and local standard devices are the same!
-default_out	EQU stdout
+dflt_in		EQU std_in	; in LOWRAM systems, both global and local standard devices are the same!
+dflt_out	EQU stdout
 #endif
 old_t1		RMB	2		; *** keep old T1 latch value for FG, revised 150208 *** might be revised or moved to firmware vars!
 

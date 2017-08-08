@@ -1,14 +1,15 @@
-; minimOS·63 0.6a5 MACRO definitions
+; minimOS·63 0.6a6 MACRO definitions
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170621-1206
+; last modified 20170808-2137
 ; adapted to MASM 20170614
+; short names 20170808
 
 ; **************************
 ; *** standard addresses ***
 ; **************************
 
 kern_ptr	EQU	$FC		; pointer to jump table, routines ending in RTS
-admin_ptr	EQU	$FFC0	; NEW fixed jump table, routines ending in RTS, intended for kernel/drivers ONLY
+adm_ptr		EQU	$FFC0	; NEW fixed jump table, routines ending in RTS, intended for kernel/drivers ONLY
 
 ; unified address (will lock at $FFE1-2 anyway)
 lock		EQU	$FFE0	; just after the above
@@ -19,7 +20,7 @@ lock		EQU	$FFE0	; just after the above
 
 ; system calling interface ***
 #define		_KERNEL(a)		LDX kern_ptr: JSR a,X
-#define		_ADMIN(a)		LDX #admin_ptr: JSR a,X
+#define		_ADMIN(a)		LDX #adm_ptr: JSR a,X
 ; Kernel/firmware function numbers are multiples of 3!!! Each entry is JMP ext
 ; besides zpar* parameters, accumulator B is used (like Y on 6502)
 
@@ -41,13 +42,13 @@ lock		EQU	$FFE0	; just after the above
 
 ; *** special functions ***
 ; new exit for asynchronous driver routines when not satisfied
-#define		_NEXT_ISR	SEC: RTS
-#define		_ISR_DONE	CLC: RTS
+#define		_NXT_ISR	SEC: RTS
+#define		_ISR_OK		CLC: RTS
 
 ; new macros for critical sections, do not just rely on SEI/CLI
 ; * accumulator A must be kept! Otherwise add PSHA after entering and PULA before exit! *
-#define		_ENTER_CS	TPA: SEI
-#define		_EXIT_CS	TAP
+#define		_CRITIC		TPA: SEI
+#define		_NO_CRIT	TAP
 
 ; *** panic call, now using SWI in case of error display *** new SWI handled 20161010
 #define		_PANIC(a)	SWI: FCC a: FCB 0

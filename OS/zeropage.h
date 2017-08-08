@@ -1,6 +1,6 @@
 ; minimOS·63 zeropage
-; v0.6a6
-; last modified 20170621-1113
+; v0.6a7
+; last modified 20170808-2008
 ; MASM compliant 20170614
 
 	ORG		0
@@ -39,7 +39,7 @@ MCU_RAMC	RMB 1			; RAM Control Register
 MCU_RSVD	RMB 11			; *** reserved ***
 
 ; ** LOWRAM microcontrollers system RAM begins here with sysvars, otherwise user zeropage can be down to zero **
-MCU_SYSRAM:
+MCU_SRAM:
 
 ; **************************************************************
 ; ** user zeropage space grows BACKWARDS from uz_top and down **

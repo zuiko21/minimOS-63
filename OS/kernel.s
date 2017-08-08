@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel
-; v0.6a7
+; v0.6a8
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170621-1411
+; last modified 20170808-2133
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -39,7 +39,7 @@ kern_head:
 	FCC		"kernel"		; filename
 	FCB		0
 kern_splash:
-	FCC		"minimOS·63 0.6a7"	; version in comment
+	FCC		"minimOS·63 0.6a8"	; version in comment
 	FCB		0
 
 	FILL	$FF, kern_head+$F8-*		; padding
@@ -79,7 +79,7 @@ warm:
 ; install SWI code (as defined in "isr/swi.s" below)
 	LDX #k_swi			; get address (3)
 	STX ex_pt			; no need to know about actual vector location (5)
-	_ADMIN(SET_BRK)		; install routine
+	_ADMIN(SET_DBG)		; install routine
 
 ; Kernel no longer supplies default NMI, but could install it otherwise
 
@@ -96,8 +96,8 @@ warm:
 ; ++++++
 	LDX #256*FREE_RAM+END_RAM	; get status of both ends (3)
 	STX ram_stat		; as it is the first entry, no index needed (6)
-	LDAA #>user_sram	; beginning of available ram, as defined... in rom.s (2)
-	LDAB #<user_sram	; LSB misaligned? (2)
+	LDAA #>user_ram		; beginning of available ram, as defined... in rom.s (2)
+	LDAB #<user_ram		; LSB misaligned? (2)
 	BEQ ram_init		; nothing to align (4)
 		INCA				; otherwise start at next page (2)
 ram_init:
@@ -120,8 +120,8 @@ ram_init:
 ; *** 1) initialise stuff ***
 ; clear some bytes
 	CLRB				; reset driver index (2)
-	STAB queues_mx		; reset all indexes, faster than CLR (5+5)
-	STAB queues_mx+1	; not worth doing LDX#/STX as same bytes and only one cycle faster
+	STAB queue_mx		; reset all indexes, faster than CLR (5+5)
+	STAB queue_mx+1		; not worth doing LDX#/STX as same bytes and only one cycle faster
 
 #ifdef LOWRAM
 ; ------ low-RAM systems have no direct tables to reset ------
@@ -163,7 +163,7 @@ dr_lclear:
 ; first get the pointer to each driver table
 drv_aix	EQU		systmp	; temporary pointer, *** might go into locals ***
 
-	LDX #drivers_ad		; driver table in ROM (3)
+	LDX #drvrs_ad		; driver table in ROM (3)
 dr_loop:
 		STX drv_aix			; reset index (5)
 		LDX 0,X				; get current pointer (6)
@@ -204,14 +204,14 @@ dr_phys:
 ; otherwise, skip the installing procedure altogether for that driver
 		ASLA				; extract MSb (will be A_POLL first) (2)
 		BCC dr_nptsk		; skip verification if task not enabled (4)
-			LDAB queues_mx+1	; get current tasks in P queue (4)
+			LDAB queue_mx+1		; get current tasks in P queue (4)
 			CMPB #MAX_QUEUE		; room for another? (2)
 				BCC dr_nabort		; if not, just abort! (4)
 dr_nptsk:
 		ASLA				; extract MSb (now is A_REQ) (2)
 		BCC dr_nrtsk		; skip verification if task not enabled (4)
-			LDAB queues_mx		; get current tasks in R queue (4)
-			CMPB #MAX_QUEUE		; room for another? (2)
+			LDAB queue_mx		; get current tasks in A queue (4)
+			CMPB #MX_QUEUE		; room for another? (2)
 				BCC dr_nabort		; did not check OK (4)
 dr_nrtsk:
 ; if arrived here, there is room for interrupt tasks, but check init code
@@ -299,7 +299,7 @@ dr_empty:
 		ASL dr_aut			; continue with bit shifting! (6)
 		BCC dr_seto			; no input for this! (4)
 #endif
-			LDX D_CIN,X		; get input routine address, this X=6502 sysptr (6)
+			LDX D_BLIN,X		; get input routine address, this X=6502 sysptr (6)
 			STX dr_iopt			; *** new temporary, will hold address to write into entry (5)
 			BSR dr_inptr		; locate entry for input according to ID! X points to entry (8+34)
 			BSR dr_setpt		; using B, copy dr_iopt into (X) (8+29)
@@ -308,7 +308,7 @@ dr_seto:
 		ASL dr_aut			; look for COUT now (6)
 		BCC dr_nout			; no output for this! (4)
 #endif
-			LDX D_COUT,X		; get output routine address, this X=6502 sysptr (6)
+			LDX D_BOUT,X		; get output routine address, this X=6502 sysptr (6)
 			STX dr_iopt			; *** new temporary, will hold address to write into entry (5)
 			BSR dr_outptr		; locate entry for output according to ID! X points to entry (8+28)
 			BSR dr_setpt		; using B, copy dr_iopt into (X) (8+29)
@@ -317,7 +317,7 @@ dr_nout:
 #else
 ; ------ IDs table filling for low-RAM systems ------
 ; check whether the ID is already in use
-		LDX #drivers_id		; beginning of ID list (3)
+		LDX #drvrs_id		; beginning of ID list (3)
 		LDAA dr_id			; fetch aspiring ID (3)
 		LDAB drv_num		; number of drivers registered this far (3)
 		BEQ dr_eol			; already at end of list (4)
@@ -381,7 +381,7 @@ dr_eol:
 			STAB 0,X			; enabled! (6)
 ; an entry is being inserted, thus update counter
 			ADDA #2				; another entry added (A had original count) (2)
-			STAA queues_mx+1	; update P-counter (5)
+			STAA queue_mx+1		; update P-counter (5)
 ; insert task and advance queue
 			BSR dr_itask		; install entry into queue (8+35, 8+23 MCU)
 			BSR dr_nextq		; and advance to next! (frequency) (8+40, 8+28 MCU)
@@ -390,9 +390,9 @@ dr_eol:
 			INC 0,X				; *** increment MSB as expected by ISR implementation ***
 ; ...but copy too into drv_count! eeeeeeeeeeeeeeeeeeek
 			LDAB 0,X			; get original MSB (increased)
-			STAB MAX_QUEUE*4,X	; ...and preset counters!!!
+			STAB MX_QUEUE*4,X	; ...and preset counters!!!
 			LDAB 1,X			; same for LSB
-			STAB MAX_QUEUE*4+1,X
+			STAB MX_QUEUE*4+1,X
 ; P-queue is done, let us go to simpler R-queue
 dr_notpq:
 		ASL dr_aut			; extract MSB (now is A_REQ) (6)
@@ -402,7 +402,7 @@ dr_notpq:
 			LDX D_REQ,X		; get this pointer (6)
 			STX systmp			; store it ***** check! (5)
 ; prepare another entry into queue
-			LDAA queues_mx		; get index of free R-entry! (4)
+			LDAA queue_mx		; get index of free A-entry! (4)
 			TAB					; two copies (2)
 #ifdef	MC6801
 ; MCUs do much better
@@ -435,7 +435,7 @@ dr_notpq:
 			STAB 0,X			; enabled! (6)
 ; an entry is being inserted, thus update counter
 			ADDA #2				; another entry added (A had original count) (2)
-			STAA queues_mx		; update R-counter (5)
+			STAA queue_mx		; update A-counter (5)
 ; insert task, no need to advance queues any more
 			BSR dr_itask		; install entry into queue (8+35, 8+23 MCU)
 dr_notrq:
@@ -447,7 +447,7 @@ dr_abort:
 ; *** if arrived here, driver initialisation failed in some way! ***
 #ifdef	LOWRAM
 ; ------ low-RAM systems keep count of installed drivers ------
-			LDX #drivers_id		; beginning of ID list (3)
+			LDX #drvrs_id		; beginning of ID list (3)
 			LDAB drv_num		; number of drivers registered this far (3)
 dr_ablst:
 				INX					; advance pointer (4)
@@ -500,7 +500,7 @@ dr_itask:
 ; likely to get inlined as used only once just after dr_itask 
 dr_nextq:
 ; update the original pointer
-	LDAB #MAX_QUEUE		; amount to add... (2)
+	LDAB #MX_QUEUE		; amount to add... (2)
 #ifdef	MC6801
 ; MCUs do it much better!
 	ABX					; ...to X which had dq_ptr as per previous dr_itask... (3)
@@ -537,7 +537,7 @@ dr_ok:					; *** all drivers inited ***
 ; startup code, revise ASAP
 ; *** set GLOBAL default I/O device ***
 	LDX #DEVICE*257		; as defined in options.h (3)
-	STX default_in		; set word (6)
+	STX dflt_in		; set word (6)
 
 ; *** interrupt setup no longer here, firmware did it! ***
 
@@ -553,6 +553,7 @@ dr_ok:					; *** all drivers inited ***
 ; **** launch monitor/shell ****
 ; ******************************
 sh_exec:
+; must use LOADLINK for this
 	LDX #shell			; get pointer to built-in shell (3)
 	STX ex_pt			; set execution address (5)
 	LDX #DEVICE*257		; *** revise (3)
@@ -603,7 +604,7 @@ k_swi:
 ; in headerless builds, keep at least the splash string
 #ifdef	NOHEAD
 kern_splash:
-	FCC		"minimOS·63 0.6a7"
+	FCC		"minimOS·63 0.6a8"
 	FCB		0
 #endif
 
