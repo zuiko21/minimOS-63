@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
-; v0.6a6
+; v0.6a7
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170805-1152
+; last modified 20170808-2149
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -50,6 +50,7 @@ cout:
 ; bl_ptr	= pointer to block
 ; bl_siz	= block size
 ;		OUTPUT
+; bl_siz	= actual block size
 ; C 		= I/O error
 ;		USES da_ptr, dr_id, plus whatever the driver takes
 
@@ -76,7 +77,7 @@ co_port:
 			BNE cio_nfound		; final error otherwise (4)
 		_EXIT_OK			; "/dev/null" is always OK (7)
 cio_phys:
-	LDX #drivers_id		; pointer to ID list (3)
+	LDX #drvrs_id		; pointer to ID list (3)
 	LDAA drv_num		; number of drivers (3)
 		BEQ cio_nfound		; no drivers at all! (4)
 cio_loop:
@@ -93,11 +94,11 @@ cio_dev:
 	ASLA				; two times is offset LSB for drivers_ad list (2)
 #ifdef	MC6801
 	TAB					; get offset here (2)
-	LDX #drivers_ad		; base address (3)
+	LDX #drvrs_ad		; base address (3)
 	ABX					; done! (3)
 #else
-	ADDA #<drivers_ad	; take table LSB (2)
-	LDAB #>drivers_ad	; same for MSB (2)
+	ADDA #<drvrs_ad		; take table LSB (2)
+	LDAB #>drvrs_ad		; same for MSB (2)
 	ADCB #0				; propagate carry (2)
 	STAB da_ptr			; store pointer to list entry (4+4)
 	STAA da_ptr+1
@@ -121,9 +122,9 @@ cio_out:
 #endif
 	JMP 0,X				; will return to caller (4...)
 
-; *****************************
-; *** CIN,  get a character ***
-; *****************************
+; ****************************
+; *** CIN, get a character ***
+; ****************************
 ;		INPUT
 ; acc B	= dev
 ;		OUTPUT
@@ -246,14 +247,14 @@ free_w:
 ; up_sec	= 32b uptime in seconds
 
 uptime:
-	_ENTER_CS			; do not change while copying, A is preserved (4)
+	_CRITIC				; do not change while copying, A is preserved (4)
 	LDX ticks			; get system variable word (4)
 	STX up_ticks		; and store it in output parameter (5)
 	LDX ticks+2			; get system variable word (4)
 	STX up_sec			; and store it in output parameter (5)
 	LDX ticks+4			; get system variable last word (4)
 	STX up_sec+2		; and store it in output parameter (5)
-	_EXIT_CS			; A was preserved (2)
+	_NO_CRIT			; A was preserved (2)
 	_EXIT_OK			; (7)
 
 
@@ -370,9 +371,9 @@ set_handler:
 	_EXIT_OK			; done (7)
 
 
-; ***************************************************************
-; *** LOAD_LINK, get address once in RAM/ROM (in development) ***
-; ***************************************************************
+; **************************************************************
+; *** LOADLINK, get address once in RAM/ROM (in development) ***
+; **************************************************************
 ;		INPUT
 ; str_pt	= pointer to filename path (will be altered!)
 ;		OUTPUT
@@ -395,7 +396,7 @@ ll_geth:
 #ifdef	SAFE
 		ORAA 254,X			; last word is CLEAR on 6800 architecture (5)
 		ORAA 255,X			; ***or put the whole 32-bit as big-endian?*** (5)
-#endif 
+#endif
 			BNE ll_nfound		; link was lost, no more to scan (4)
 		LDAA 7,X			; after type and size, get eigth byte in header (5)
 		CMPA #CR			; was it a CR? (2)

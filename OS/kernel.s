@@ -2,7 +2,7 @@
 ; v0.6a8
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170808-2133
+; last modified 20170808-2142
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -348,7 +348,7 @@ dr_eol:
 			LDX D_POLL,X		; get this pointer (6)
 			STX systmp			; store it ***** check! (5)
 ; prepare another entry into queue
-			LDAA queues_mx+1	; get index of free P-entry! (4)
+			LDAA queue_mx+1		; get index of free P-entry! (4)
 			TAB					; two copies (2)
 #ifdef	MC6801
 ; MCUs do much better
