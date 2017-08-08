@@ -1,8 +1,8 @@
 ; firmware for minimOS·63
 ; sort-of generic template
-; v0.6a6
+; v0.6a7
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170621-1247
+; last modified 20170808-2340
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -24,7 +24,7 @@ fw_start:
 	FCC		"boot"				; mandatory filename for firmware
 	FCB		0
 fw_splash:
-	FCC		"0.6a6 firmware for "	; version in comment
+	FCC		"0.6a7 firmware for "	; version in comment
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB		0
@@ -343,7 +343,7 @@ fw_fgen:
 
 ; CS is 28+3 bytes, (6+)18+ 256*43 = (6+) 11026 cycles
 fw_install:
-	_ENTER_CS			; disable interrupts!
+	_CRITIC				; disable interrupts!
 	PSHA				; EEEEEEEEEEEK
 	CLRB				; reset counter (2)
 	LDX #fw_table		; get destination pointer (3) eeeeeeeek
@@ -363,7 +363,7 @@ fwi_loop:
 	LDX #fw_table		; the firmware table will be pointed... (3)
 	STX kern_ptr		; ...from the standard address (5)
 	PULA				; EEEEEEEEEEEK
-	_EXIT_CS			; restore interrupts if needed
+	_NO_CRIT			; restore interrupts if needed
 	_DR_OK				; all done
 
 
@@ -372,7 +372,7 @@ fwi_loop:
 ; acc B <- function to be patched
 
 fw_patch:
-	_ENTER_CS			; disable interrupts, respects A
+	_CRITIC			; disable interrupts, respects A
 #ifdef	MC6801
 	PSHA				; eeeek
 	LDX #fw_table		; take base address
@@ -392,7 +392,7 @@ fw_patch:
 	LDAB kerntab+1		; and LSB
 	STAB 1,X
 #endif
-	_EXIT_CS			; restore interrupts
+	_NO_CRIT			; restore interrupts
 	_DR_OK				; done
 
 
@@ -431,7 +431,7 @@ fw_map:
 ; if case of no headers, at least keep machine name somewhere
 #ifdef	NOHEAD
 fw_splash:
-	FCC		"0.6a6 firmware for "
+	FCC		"0.6a7 firmware for "
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB 	0
@@ -446,9 +446,9 @@ fw_mname:
 	JMP fw_gestalt		; GESTALT get system info (renumbered) @0
 	JMP fw_s_isr		; SET_ISR set IRQ vector +3
 	JMP fw_s_nmi		; SET_NMI set (magic preceded) NMI routine +6
-	JMP fw_s_brk		; SET_BRK set debugger, new 20170517 +9
+	JMP fw_s_brk		; SET_DBG set debugger, new 20170517 +9
 	JMP fw_jiffy		; JIFFY set jiffy IRQ speed, ** TBD ** +C
-	JMP fw_i_src		; *** IRQ_SOURCE get interrupt source for total ISR independence +F
+	JMP fw_i_src		; *** IRQ_SRC get interrupt source for total ISR independence +F
 
 ; pretty hardware specific
 	JMP fw_power		; POWEROFF power-off, suspend or cold boot +12

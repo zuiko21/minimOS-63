@@ -1,7 +1,7 @@
 ; minimOS•63 SWI handler
-; v0.6a1
+; v0.6a2
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170620-2112
+; last modified 20170808-2331
 
 #include "../usual.h"
 ; this is currently a panic/crash routine!
