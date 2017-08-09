@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
-; v0.6a7
+; v0.6a8
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170808-2149
+; last modified 20170809-1156
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -36,11 +36,14 @@ dr_shutdown:
 ; io_c		= char
 ;		OUTPUT
 ; C 		= I/O error
-;		USES da_ptr, dr_id, plus whatever the driver takes
-
-cio_of		EQU dr_id	; parameter switching between CIN and COUT, must leave da_ptr clear!
+;		USES BOUT
 
 cout:
+	LDX #io_c			; parameter address
+	STX bl_ptr
+	LDX #1				; single byte
+	STX bl_siz
+; ...and fall into BOUT
 
 ; **************************
 ; *** BOUT, block output ***
@@ -50,7 +53,7 @@ cout:
 ; bl_ptr	= pointer to block
 ; bl_siz	= block size
 ;		OUTPUT
-; bl_siz	= actual block size
+; bl_siz	= REMAINING size
 ; C 		= I/O error
 ;		USES da_ptr, dr_id, plus whatever the driver takes
 
@@ -129,6 +132,24 @@ cio_out:
 ; acc B	= dev
 ;		OUTPUT
 ; io_c	= char
+; C		= not available
+;		USES BLIN
+
+	LDX #io_c			; parameter address
+	STX bl_ptr
+	LDX #1				; single byte
+	STX bl_siz
+; ...and fall into BLIN??? ***REVISE***
+
+; ***********************
+; *** BLIN, get block *** REVISE
+; ***********************
+;		INPUT
+; acc B		= dev
+; bl_ptr	= buffer address
+; bl_siz	= maximum transfer
+;		OUTPUT
+; bl_siz	= REMAINING bytes
 ; C		= not available
 ;		USES dr_id and whatever the driver takes
 ; cin_mode is a kernel variable
