@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel
-; v0.6a8
+; v0.6a9
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170808-2142
+; last modified 20170815-1721
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -39,7 +39,7 @@ kern_head:
 	FCC		"kernel"		; filename
 	FCB		0
 kern_splash:
-	FCC		"minimOS·63 0.6a8"	; version in comment
+	FCC		"minimOS·63 0.6a9"	; version in comment
 	FCB		0
 
 	FILL	$FF, kern_head+$F8-*		; padding
@@ -604,7 +604,7 @@ k_swi:
 ; in headerless builds, keep at least the splash string
 #ifdef	NOHEAD
 kern_splash:
-	FCC		"minimOS·63 0.6a8"
+	FCC		"minimOS·63 0.6a9"
 	FCB		0
 #endif
 

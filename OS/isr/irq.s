@@ -1,8 +1,8 @@
 ; ISR for minimOS•63
-; v0.6a5, should match kernel.s
+; v0.6a6, should match kernel.s
 ; features TBD
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170808-2334
+; last modified 20170815-1722
 
 #define		ISR		_ISR
 
@@ -120,7 +120,7 @@ i_poll:
 			LDX 0,X				; solve indirect (6)
 			JSR 0,X				; call from table (...)
 ; *** here is the return point needed for B_EXEC in order to create the stack frame ***
-isr_sched_ret:				; *** take this standard address!!! ***
+isr_schd:				; *** take this standard address!!! ***
 		LDX systmp			; restore pointer... (4)
 i_nxpll:
 		INX					; ...to next value (4+4)
@@ -151,5 +151,3 @@ isr_nw:
 		BNE second			; no wrap (4)
 	INC ticks+2			; 16M more seconds (6)
 	BRA isr_done		; go away (3)
-
-

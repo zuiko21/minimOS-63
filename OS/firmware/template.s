@@ -1,8 +1,8 @@
 ; firmware for minimOS·63
 ; sort-of generic template
-; v0.6a7
+; v0.6a8
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170808-2340
+; last modified 20170815-1656
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -24,7 +24,7 @@ fw_start:
 	FCC		"boot"				; mandatory filename for firmware
 	FCB		0
 fw_splash:
-	FCC		"0.6a7 firmware for "	; version in comment
+	FCC		"0.6a8 firmware for "	; version in comment
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB		0
@@ -302,7 +302,7 @@ fw_i_src:
 
 ; POWEROFF, poweroff etc
 ; acc B <- mode (0 = suspend, 2 = warmboot, 4 = coldboot, 6 = poweroff)
-; *** might add special codes for SWI/NMI triggering ***
+; *** special codes for SWI/NMI triggering (10 = NMI, 12 = SWI) ***
 ; C -> not implemented
 
 fw_power:
@@ -314,13 +314,20 @@ fwp_exit:
 fwp_ns:
 	CMPB #PW_WARM		; warm?
 	BNE fwp_nw			; not
-		LDX fw_warm			; or get kernel start vector
-		JMP 0,X				; warm boot!
+		JMP start_kernel		; warm boot!
 fwp_nw:
 	CMPB #PW_COLD		; cold?
 	BNE fwp_nc			; not
 		JMP reset			; or go to internal reset!
 fwp_nc:
+	CMPB #PW_HARD		; NMI?
+	BNE fwp_nhi			; not
+		JMP nmi				; NMI!
+fwp_nhi:
+	CMPB #PW_SOFT		; SWI? Not sure if really needed...
+	BNE fwp_nsi			; not
+		JMP brk_hndl			; SWI!
+fwp_nsi:
 	CMPB #PW_OFF		; off?
 	BNE fwp_exit		; not recognised
 ; should add here shutdown code
@@ -431,7 +438,7 @@ fw_map:
 ; if case of no headers, at least keep machine name somewhere
 #ifdef	NOHEAD
 fw_splash:
-	FCC		"0.6a7 firmware for "
+	FCC		"0.6a8 firmware for "
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB 	0

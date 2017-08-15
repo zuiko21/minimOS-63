@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
-; v0.6a8
+; v0.6a10
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170809-1156
+; last modified 20170815-1642
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -199,7 +199,7 @@ ci_notdle:
 		JSR signal			; send signal FASTER (9)
 ci_abort:
 		_ERR(EMPTY)			; no character was received (9)
-		
+
 ; *** check for some logical devices ***
 ci_nph:
 ; only logical devs, no need to check for windows or filesystem
@@ -676,6 +676,8 @@ sd_done:
 		BEQ sd_fw			; tell firmware! (4)
 	CMPB #PW_COLD		; cold boot? (2)
 		BEQ sd_fw			; tell firmware! (4)
+	CMPB #PW_HARD		; interrupt? (2)
+		BGE sd_fw			; tell firmware! (4)
 	CMPB #PW_WARM		; just a warm restart? (2)
 	BEQ sd_warm			; will not tell firmware, just jump there (4)
 		_ERR(INVALID)		; unrecognised command! (9)

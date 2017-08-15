@@ -1,7 +1,7 @@
-; minimOS·63 0.6a5 API/ABI
+; minimOS·63 0.6a6 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170805-1150
+; last modified 20170815-1637
 ; MASM compliant 20170614, 8-char max names 20170805
 
 ; *************************************************
@@ -205,6 +205,9 @@ PW_WARM		EQU  2	; warm reset (needs no firmware) renumbered 150603
 PW_COLD		EQU  4	; cold reset (needed for compatibility with other architectures) renumbered 150603
 PW_OFF		EQU  6	; power off
 PW_CLEAN	EQU  8	; scheduler detected system is clean for poweroff! new 20160408
+; new interrupt invoking codes
+PW_HARD		EQU 10	; invoke hardware interrupt (NMI-like)
+PW_SOFT		EQU 12	; invoke software interrupt, not really needed as SWI directly handled
 
 ; *******************************************
 ; ** optional windowing system values, TBD **
