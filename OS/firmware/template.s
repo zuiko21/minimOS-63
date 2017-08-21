@@ -1,8 +1,8 @@
 ; firmware for minimOS·63
-; sort-of generic template
-; v0.6a8
+; sort-of generic template, but intended for KERAton
+; v0.6a9
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170815-1656
+; last modified 20170821-1602
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -24,7 +24,7 @@ fw_start:
 	FCC		"boot"				; mandatory filename for firmware
 	FCB		0
 fw_splash:
-	FCC		"0.6a8 firmware for "	; version in comment
+	FCC		"0.6a9 firmware for "	; version in comment
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB		0
@@ -218,17 +218,24 @@ fw_gestalt:
 ; SET_ISR, set IRQ vector
 ;		INPUT
 ; kerntab	= address of ISR (will take care of all necessary registers)
+;		0 means read current!
 
 fw_s_isr:
 ; no CS as STX is atomic!
 	LDX kerntab			; get pointer
-	STX fw_isr			; store for firmware
+	BEQ fw_r_isr			; in case of read...
+		STX fw_isr			; ...or store for firmware
+		_DR_OK				; done
+fw_r_isr:
+	LDX fw_isr			; get current
+	STX kerntab			; and return it
 	_DR_OK				; done
 
 
 ; SET_NMI, set NMI vector
 ;		INPUT
 ; kerntab	= address of NMI code (including magic string, ends in RTS)
+;		0 means read current!
 
 ; might check whether the pointed code starts with the magic string
 ; as the magic string will NOT get "executed", can safely be the same as 6502
@@ -236,6 +243,7 @@ fw_s_isr:
 
 fw_s_nmi:
 	LDX kerntab			; get pointer to supplied code + magic string
+		BEQ fw_r_nmi			; in case of read...
 #ifdef	SAFE
 	LDAA 0,X			; first char
 	CMPA #'U'			; is it correct?
@@ -256,16 +264,26 @@ fsn_valid:
 ; transfer supplied pointer to firmware vector
 	STX fw_nmi			; store for firmware
 	_DR_OK				; done
+fw_r_nmi:
+	LDX fw_nmi			; get current
+	STX kerntab			; and return it
+	_DR_OK				; done
 
 
-; SET_BRK, set SWI handler
+; SET_DBG, set SWI handler
 ;		INPUT
 ; kerntab	= address of SWI routine (ending in RTS)
+;		0 means read current!
 ; no CS as STX is atomic!
 
 fw_s_brk:
 	LDX kerntab			; get pointer
-	STX fw_brk			; store for firmware
+	BEQ fw_r_brk			; in case of read...
+		STX fw_brk			; store for firmware
+		_DR_OK				; done
+fw_r_brk:
+	LDX fw_brk			; get current
+	STX kerntab			; and return it
 	_DR_OK				; done
 
 
@@ -274,7 +292,8 @@ fw_s_brk:
 ; irq_hz	= frequency in Hz (0 means no change)
 ;		OUTPUT
 ; irq_hz	= actually set frequency (in case of error or no change)
-; C			= could not set (not here)
+; C			= could not set (KERAton)
+
 fw_jiffy:
 ; GENERIC!!!
 ; if could not change, then just set return parameter and C
@@ -286,6 +305,7 @@ fj_end:
 	_DR_OK
 fj_set:
 	STX irq_freq		; store in sysvars
+; ***** must set counters accordingly! *****
 	BRA fj_end			; all done, no need to update as will be OK
 
 
@@ -438,7 +458,7 @@ fw_map:
 ; if case of no headers, at least keep machine name somewhere
 #ifdef	NOHEAD
 fw_splash:
-	FCC		"0.6a8 firmware for "
+	FCC		"0.6a9 firmware for "
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB 	0
