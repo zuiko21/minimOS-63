@@ -1,8 +1,8 @@
 ; firmware for minimOS·63
 ; sort-of generic template, but intended for KERAton
-; v0.6a9
+; v0.6a10
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170821-1602
+; last modified 20170821-1807
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -24,7 +24,7 @@ fw_start:
 	FCC		"boot"				; mandatory filename for firmware
 	FCB		0
 fw_splash:
-	FCC		"0.6a9 firmware for "	; version in comment
+	FCC		"0.6a10 firmware for "	; version in comment
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB		0
@@ -82,8 +82,9 @@ post:
 ; as NMI will be validated, no need to preinstall it!
 
 ; *** preset jiffy irq frequency ***
-; not needed as will be done by installed kernel, no older versions to keep compatible!
-
+; should get accurate values from options.h
+	LDX #150		; this is freq, not period!
+	STX 
 ; *** reset jiffy count ***
 	LDX #ticks			; first address in uptime seconds AND ticks, assume contiguous
 res_sec:

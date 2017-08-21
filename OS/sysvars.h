@@ -1,6 +1,6 @@
 ; minimOS·63 0.6a3 System Variables
 ; (c) 2012-2017 Carlos J. Santisteban
-; last modified 20170808-2120
+; last modified 20170821-1803
 ; shorter names 20170808
 
 ; **** I/O management ****
@@ -46,7 +46,7 @@ ram_pid		RMB MAX_LIST		; non-interleaved PID array
 ; *************************************************
 ; ** these are the older variables, up to 150126 **
 ; *************************************************
-irq_freq	FDB	200		; IRQs per second (originally set from options.h)
+irq_freq	FDB	150		; IRQs per second (originally set from options.h)
 ticks		RMB	6		; second fraction in jiffy IRQs, then approximate uptime in seconds (2+4 bytes) new format 161006
 sd_flag		RMB	1		; default task upon no remaining braids! 160408
 #ifndef	LOWRAM

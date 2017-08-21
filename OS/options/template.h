@@ -2,7 +2,7 @@
 ; sort-of-template, possibly KERAton inspired
 ; copy or link as options.h in root dir
 ; (c) 2015-2017 Carlos J. Santisteban
-; last modified 20170621-1310
+; last modified 20170621-1800
 
 ; *** set conditional assembly ***
 
@@ -104,5 +104,5 @@ IRQ_FREQ 	EQU	150			; general case
 ; could be PHI2/IRQ_FREQ-2
 
 ; speed code in fixed-point format
-SPEED_CODE 	EQU	$0F		; 921.6 kHz system
-; could be computed as PHI2*16/1000000
+SPD_CODE 	EQU	3775		; 921.6 kHz system
+; could be computed as PHI2*4096/1000000, new precision!
