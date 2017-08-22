@@ -1,8 +1,8 @@
 ; firmware for minimOS·63
 ; sort-of generic template, but intended for KERAton
-; v0.6a10
+; v0.6a11
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170821-1807
+; last modified 20170822-2006
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -24,7 +24,7 @@ fw_start:
 	FCC		"boot"				; mandatory filename for firmware
 	FCB		0
 fw_splash:
-	FCC		"0.6a10 firmware for "	; version in comment
+	FCC		"0.6a11 firmware for "	; version in comment
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB		0
@@ -81,17 +81,10 @@ post:
 	STX fw_brk			; new fwvar
 ; as NMI will be validated, no need to preinstall it!
 
-; *** preset jiffy irq frequency ***
-; should get accurate values from options.h
-	LDX #150		; this is freq, not period!
-	STX 
 ; *** reset jiffy count ***
-	LDX #ticks			; first address in uptime seconds AND ticks, assume contiguous
-res_sec:
-		CLR 0,X				; reset byte
-		INX					; next
-		CPX #ticks+5		; first invalid address
-		BNE res_sec			; continue until reached
+	LDX #0			; not worth a loop
+	STX ticks		; reset word
+	STX ticks+2		; next
 
 ; ********************************
 ; *** hardware interrupt setup ***
@@ -99,6 +92,12 @@ res_sec:
 ; KERAton has no VIA, jiffy IRQ is likely to be fixed on, perhaps enabling counter input on PIA
 ;	LDAA #$C0			; enable T1 (jiffy) interrupt only
 ;	STAA VIA_J+IER
+
+; *** preset jiffy irq frequency ***
+; should get accurate values from options.h
+	LDX #IRQ_PER		; this is period!
+	STX irq_hz		; set parameter
+	_ADMIN(JIFFY)		; proceed
 
 ; **********************************
 ; *** direct print splash string ***
@@ -194,7 +193,7 @@ std_nmi:
 
 ; GESTALT, get system info, API TBD
 ; cpu_ll	= CPU type
-; c_speed	= speed code
+; c_speed	= speed code (16b)
 ; str_pt	= points to a string with machine name
 ; ex_pt		= points to a map of default memory conf ???
 ; k_ram		= available pages of (kernel) SRAM
@@ -203,9 +202,9 @@ std_nmi:
 fw_gestalt:
 
 	LDAB fw_cpu			; get kind of CPU (previoulsy stored or determined) (3)
-	LDAA #SPEED_CODE	; speed code as determined in options.h (2)
-	STAB cpu_ll			; set outputs (4+4)
-	STAA c_speed
+	LDX #SPEED_CODE		; speed code as determined in options.h ()
+	STAB cpu_ll			; set outputs (4+)
+	STX c_speed
 	LDAA himem			; get pages of SRAM??? (3)
 	STAA k_ram			; store output (4)
 ; no "high" RAM on this architecture
