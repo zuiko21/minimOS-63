@@ -1,8 +1,8 @@
 ; firmware variables for minimOS·63
 ; sort-of template, possibly fine for KERAton
-; v0.6a2
+; v0.6a3
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170815-1702
+; last modified 20170822-1951
 
 #ifndef	LOWRAM
 fw_table	FILL	$FF, 256		; NOT available in 128-byte systems
@@ -13,3 +13,4 @@ fw_brk		RMB 2				; SWI vector, new 20170602
 fw_warm		RMB 2				; start of kernel, new 20150220
 fw_cpu		FCB 'M'				; CPU type ('M'= 6800)
 himem		RMB 1				; number of available 'kernel-RAM' pages, 0 means 128-byte RAM
+irq_freq	FDB	150			; IRQs per second... or period?
