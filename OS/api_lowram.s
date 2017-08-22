@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
-; v0.6a10
+; v0.6a11
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170815-1642
+; last modified 20170822-1955
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -264,8 +264,8 @@ free_w:
 ; *** UPTIME, get approximate uptime ***
 ; **************************************
 ;		OUTPUT
-; up_ticks	= 16b ticks, new standard format 20161006
-; up_sec	= 32b uptime in seconds
+; up_ticks	= 32b ticks, new format 20170822
+; up_sec	= 24b approximate uptime in seconds for API compatibility
 
 uptime:
 	_CRITIC				; do not change while copying, A is preserved (4)
@@ -273,8 +273,6 @@ uptime:
 	STX up_ticks		; and store it in output parameter (5)
 	LDX ticks+2			; get system variable word (4)
 	STX up_sec			; and store it in output parameter (5)
-	LDX ticks+4			; get system variable last word (4)
-	STX up_sec+2		; and store it in output parameter (5)
 	_NO_CRIT			; A was preserved (2)
 	_EXIT_OK			; (7)
 
@@ -499,7 +497,7 @@ ll_valid:
 
 
 ; *********************************
-; *** STRING, prints a C-string ***
+; *** STRING, prints a C-string *** REVISE
 ; *********************************
 ;		INPUT
 ; acc B		= dev
