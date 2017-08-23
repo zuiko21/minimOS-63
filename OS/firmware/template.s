@@ -1,8 +1,8 @@
 ; firmware for minimOS·63
 ; sort-of generic template, but intended for KERAton
-; v0.6a11
+; v0.6a12
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170822-2006
+; last modified 20170823-2250
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -24,7 +24,7 @@ fw_start:
 	FCC		"boot"				; mandatory filename for firmware
 	FCB		0
 fw_splash:
-	FCC		"0.6a11 firmware for "	; version in comment
+	FCC		"0.6a12 firmware for "	; version in comment
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB		0
@@ -96,8 +96,11 @@ post:
 ; *** preset jiffy irq frequency ***
 ; should get accurate values from options.h
 	LDX #IRQ_PER		; this is period!
+; here comes the standard procedure, where JIFFY is able to change frequency!
 	STX irq_hz		; set parameter
 	_ADMIN(JIFFY)		; proceed
+; machines with FIXED IRQ frequency (eg. KERAton) do this instead
+;	STX irq_freq		; only for reading value!
 
 ; **********************************
 ; *** direct print splash string ***
@@ -292,21 +295,30 @@ fw_r_brk:
 ; irq_hz	= frequency in Hz (0 means no change)
 ;		OUTPUT
 ; irq_hz	= actually set frequency (in case of error or no change)
-; C			= could not set (KERAton)
+; C			= could not set
 
 fw_jiffy:
-; GENERIC!!!
-; if could not change, then just set return parameter and C
 	LDX irq_hz			; get input values
-		BNE fj_set			; not just checking
-	LDX irq_freq		; get current frequency
-	STX irq_hz			; set return values
+	BNE fj_set			; not just checking
+		LDX irq_freq		; get current frequency
+		STX irq_hz			; set return values
 fj_end:
-	_DR_OK
+; reload in case of successful change
+; supress in case of fixed IRQ (KERAton)
+		LDX irq_hz		; get requested
+		STX irq_freq		; set, will not harm
+		_DR_OK
 fj_set:
-	STX irq_freq		; store in sysvars
-; ***** must set counters accordingly! *****
-	BRA fj_end			; all done, no need to update as will be OK
+; generic code, fixed IRQ systems just notice error!
+; multiply irq_hz (16b) by SPD_CODE (16b), then shift 12b right
+; MCUs do much better...
+#ifdef	MC6801
+; use several MUL to get the 32b result
+#else
+#endif
+	BRA fj_end			; success
+fj_over:
+	_DR_ERR(INVALID)
 
 
 ; IRQ_SOURCE, investigate source of interrupt
@@ -458,7 +470,7 @@ fw_map:
 ; if case of no headers, at least keep machine name somewhere
 #ifdef	NOHEAD
 fw_splash:
-	FCC		"0.6a9 firmware for "
+	FCC		"0.6a12 firmware for "
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB 	0
