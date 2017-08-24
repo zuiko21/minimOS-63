@@ -2,7 +2,7 @@
 ; sort-of generic template, but intended for KERAton
 ; v0.6a12
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170824-1959
+; last modified 20170824-2152
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -319,7 +319,7 @@ fj_set:
 	LDAB #<SPD_CODE		; L
 	MUL			; JxL
 ; as the result LSB is to be discarded, just keep the high part!
-	STAA local1		; JL/256
+	STAA local1		; JL.high
 ; now IxL, shift one byte
 	LDAA irq_hz		; I
 	LDAB #<SPD_CODE		; L again
@@ -352,20 +352,22 @@ fj_set:
 	ADCB local2+2		; ...add 'I' from 4th line
 	STAB local3		; full result is ready!!!
 #else
+; do russian-style multiply!
+
 #endif
 ; time to shift 4 bits to the right
 #ifdef	MC6801
-; MCU is 14b/75t
+; MCU is 14b/71t
 	LDX #4			; preset counter (3)
 	LDD local3		; put highest in D (4)
 fj_shft:
 		LSRD			; shift 2 bytes... (3)
 		ROR local3+2		; ...plus last (6)
 		DEX
-		BNE fj_shft		; until done (3+4)
+		BNE fj_shft		; until done (3+3)
 	STD local3		; update full value (4)
 #else
-; classic 6800 is 98t
+; classic 6800 is 14b/98t
 ;	LDAB #4			; preset counter (2)
 ;fj_shft:
 ;		LSR local3		; shift first... (6)
@@ -397,19 +399,40 @@ fj_shft:
 ;	STAB local3+1
 #endif
 ; if carry is set, must add 1 before subtracting 2
-; best is inverting C and doing it like the 6502!
-	BCS fj_bcs		; carry was set?
-		SEC			; if not, set it!
+; prepare accurate value for VIA
+#ifdef	MC6801
+	LDD local3+1		; get full value
+#else
+	LDAA local3+1		; get full value
+	LDAB local3+2
+#endif
+	BCS fj_rnd		; C was set, subtract 1 only
+		SUBB #2			; otherwise round low
+		BRA fj_msb		; and go for next byte
+fj_rnd:
+	SUBB #1			; round up
+fj_msb:
+	SBCA #0			; propagate borrow
+	BCC fj_nbor		; no more to check
+		DEC local3		; rare but possible
+fj_nbor:
+#ifdef	MC6801
+	STD local3+1		; update full value
+#else
+	STAA local3+1		; update full value
+	STAB local3+2
+#endif
 ; finally check whether fits range
 	LDAA local3		; check MSB, must be zero
 	BNE fj_over		; no, out of range
+; otherwise get computed value...
 #ifdef	MC6801
 		LDD local3+1		; get result, big-endian
 #else
 		LDAA local3+1		; otherwise get result
 		LDAB local3+2		; big-endian!
 #endif
-; now set computed period into counters... converting endianness!
+; ...and set it into counters, converting endianness!
 		STAB VIA_J+T1CL		; VIA is little-endian!
 		STAA VIA_J+T1CH		; start counting
 		BRA fj_end		; success
