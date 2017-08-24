@@ -2,7 +2,7 @@
 ; sort-of generic template, but intended for KERAton
 ; v0.6a12
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170823-2250
+; last modified 20170824-1959
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -294,7 +294,7 @@ fw_r_brk:
 ;		INPUT
 ; irq_hz	= frequency in Hz (0 means no change)
 ;		OUTPUT
-; irq_hz	= actually set frequency (in case of error or no change)
+; irq_hz	= actually set frequency (in case of no change)
 ; C			= could not set
 
 fw_jiffy:
@@ -313,10 +313,106 @@ fj_set:
 ; multiply irq_hz (16b) by SPD_CODE (16b), then shift 12b right
 ; MCUs do much better...
 #ifdef	MC6801
-; use several MUL to get the 32b result
+; use several MUL to get the 32b result, IJxKL
+; first JxL, no shift
+	LDAA irq_hz+1		; J
+	LDAB #<SPD_CODE		; L
+	MUL			; JxL
+; as the result LSB is to be discarded, just keep the high part!
+	STAA local1		; JL/256
+; now IxL, shift one byte
+	LDAA irq_hz		; I
+	LDAB #<SPD_CODE		; L again
+	MUL			; IxL
+	STD local1+2		; IL, will shift 1
+; now JxK, shift one too
+	LDAA irq_hz+1		; J
+	LDAB #>SPD_CODE		; K now
+	MUL			; JxK
+	STD local2		; JK, will shift 1 too
+; finally IxK will be shifted two bytes!
+	LDAA irq_hz		; I
+	LDAB #>SPD_CODE		; K again
+	MUL			; IxK
+	STD local2+2		; IK, will shift 2 bytes
+; now add things, up to three bytes!
+;  ••JL
+;  •IL•
+;  •JK•
+; +IK••
+;  123x
+	LDD local1+2		; full 'IL' on second line
+	ADDB local1		; first add 'J' on first product
+	ADCB local2+1		; add with carry 'K' on 3rd line
+; accumulator B is ready
+	ADCA local2 		; for mid byte add 'J' on 3rd line
+	ADCA local2+3 		; and 'K' on 4th line
+	STD local3+1		; lowest 16-bit ready!
+	CLRB			; for first byte...
+	ADCB local2+2		; ...add 'I' from 4th line
+	STAB local3		; full result is ready!!!
 #else
 #endif
-	BRA fj_end			; success
+; time to shift 4 bits to the right
+#ifdef	MC6801
+; MCU is 14b/75t
+	LDX #4			; preset counter (3)
+	LDD local3		; put highest in D (4)
+fj_shft:
+		LSRD			; shift 2 bytes... (3)
+		ROR local3+2		; ...plus last (6)
+		DEX
+		BNE fj_shft		; until done (3+4)
+	STD local3		; update full value (4)
+#else
+; classic 6800 is 98t
+;	LDAB #4			; preset counter (2)
+;fj_shft:
+;		LSR local3		; shift first... (6)
+;		ROR local3+1		; ...into 2nd... (6)
+;		ROR local3+2		; ...plus last (6)
+;		DECB
+;		BNE fj_shft		; until done (2+4)
+; alternative 6800 is 16b/88t
+	LDAB #4			; preset counter (2)
+	LDAA local3		; put MSB in A (3)
+fj_shft:
+		LSRA			; shift 1st byte... (2)
+		ROR local3+1		; ...plus 2nd... (6)
+		ROR local3+2		; ...and last (6)
+		DECB
+		BNE fj_shft		; until done (2+4)
+	STAA local3		; must update, unfortunately (3)
+; another 6800 is 19b/87t
+;	LDX #4			; preset counter (3)
+;	LDAA local3		; put MSB in A (3)
+;	LDAB local3+1		; middle byte in B (3)
+;fj_shft:
+;		LSRA			; shift 1st byte... (2)
+;		LSRB			; ...plus 2nd... (2)
+;		ROR local3+2		; ...and last (6)
+;		DEX
+;		BNE fj_shft		; until done (4+4)
+;	STAA local3		; must update, unfortunately (3+3)
+;	STAB local3+1
+#endif
+; if carry is set, must add 1 before subtracting 2
+; best is inverting C and doing it like the 6502!
+	BCS fj_bcs		; carry was set?
+		SEC			; if not, set it!
+; finally check whether fits range
+	LDAA local3		; check MSB, must be zero
+	BNE fj_over		; no, out of range
+#ifdef	MC6801
+		LDD local3+1		; get result, big-endian
+#else
+		LDAA local3+1		; otherwise get result
+		LDAB local3+2		; big-endian!
+#endif
+; now set computed period into counters... converting endianness!
+		STAB VIA_J+T1CL		; VIA is little-endian!
+		STAA VIA_J+T1CH		; start counting
+		BRA fj_end		; success
 fj_over:
 	_DR_ERR(INVALID)
 
