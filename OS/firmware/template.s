@@ -2,7 +2,7 @@
 ; sort-of generic template, but intended for KERAton
 ; v0.6a12
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170824-2152
+; last modified 20170825-2329
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -353,7 +353,30 @@ fj_set:
 	STAB local3		; full result is ready!!!
 #else
 ; do russian-style multiply!
-
+	LDX irq_hz		; get 1st factor
+	STX local1+2		; store local copy...
+	LDX #0
+	STX local1		; ...with room to be shifted left
+	STX local3		; clear result too
+	STX local3+2
+	LDX #SPD_CODE		; second factor
+	STX local2		; will be shifted right
+fj_mul:
+		LSR local2		; extract lsb
+		ROR local2+1
+		BCC fj_next		; was clear, do not add
+			LDAA #4			; otherwise set loop
+			LDX #local1+3		; set pointer to LSB
+			CLC			; loop does not tell ADD from ADC
+fj_add:
+				LDAB 0,X		; get 1st
+				ADCB 8,X		; add result
+				STAB 8,X		; update
+				DEX			; point to previous byte
+				DECA			; one less
+				BNE fj_add
+fj_next:
+		
 #endif
 ; time to shift 4 bits to the right
 #ifdef	MC6801
