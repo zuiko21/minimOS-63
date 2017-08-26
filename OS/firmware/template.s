@@ -2,7 +2,7 @@
 ; sort-of generic template, but intended for KERAton
 ; v0.6a12
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170825-2329
+; last modified 20170826-1859
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -365,18 +365,38 @@ fj_mul:
 		LSR local2		; extract lsb
 		ROR local2+1
 		BCC fj_next		; was clear, do not add
-			LDAA #4			; otherwise set loop
-			LDX #local1+3		; set pointer to LSB
-			CLC			; loop does not tell ADD from ADC
+; add current 1st factor to result, with loop takes 16b/111t
+			LDAA #4			; otherwise set loop (2)
+			LDX #local1+3		; set pointer to LSB (3)
+			CLC			; loop does not tell ADD from ADC (2)
 fj_add:
-				LDAB 0,X		; get 1st
-				ADCB 8,X		; add result
-				STAB 8,X		; update
-				DEX			; point to previous byte
-				DECA			; one less
+				LDAB 0,X		; get 1st (5)
+				ADCB 8,X		; add result (5)
+				STAB 8,X		; update (6)
+				DEX			; point to previous byte (4)
+				DECA			; one less (2+4)
 				BNE fj_add
+; loopless alternative, takes 24b/40t
+;			LDAA local1+3		; get 1st LSB (3)
+;			ADDA local3+3		; add result, first with no carry! (3)
+;			STAA local3+3		; update (4)
+;			LDAA local1+2		; same for remaining bytes
+;			ADCA local3+2		; but add with carry (3)
+;			STAA local3+2
+;			LDAA local1+1
+;			ADCA local3+1
+;			STAA local3+1
+;			LDAA local1
+;			ADCA local3
+;			STAA local3		; done
 fj_next:
-		
+		ASL local1+3		; shift 1st factor left
+		ROL local1+2
+		ROL local1+1
+		ROL local1
+; check remaining bits on 2nd factor
+		LDX local2		; full 16-bit check
+		BNE fj_mul		; continue until done
 #endif
 ; time to shift 4 bits to the right
 #ifdef	MC6801
