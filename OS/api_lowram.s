@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
-; v0.6a11
+; v0.6a12
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170822-1955
+; last modified 20170828-2205
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -78,6 +78,9 @@ co_port:
 ; investigate rest of logical devices
 		CMPB #DEV_NULL		; lastly, ignore output (2)
 			BNE cio_nfound		; final error otherwise (4)
+; DEV_NULL must reset transfer size!
+		LDX #0
+		STX bl_siz			; transfer complete
 		_EXIT_OK			; "/dev/null" is always OK (7)
 cio_phys:
 	LDX #drvrs_id		; pointer to ID list (3)
@@ -207,6 +210,22 @@ ci_nph:
 		BEQ ci_rnd			; compute it! (4)
 	CMPB #DEV_NULL		; lastly, ignore input (2)
 		BNE cio_nfound		; final error otherwise (4)
+; otherwise must fill buffer with zeroes like /dev/zero!!!
+	LDAA bl_ptr		; get pointer
+	LDAB bl_ptr+1
+	ADDB bl_siz+1		; add size for last address
+	ADCA bl_siz
+	STAA local1		; store pointer for X...
+	STAB local1+1
+	LDX local1		; get end address (+1)
+	LDAA #0			; STAA is faster than CLR
+ci_nl:
+		DEX			; reverse loop
+		STAA 0,X		; clear byte
+		CPX bl_ptr		; compare against buffer start
+		BNE ci_nl		; until done
+	LDX #0			; no remaining bytes
+	STX bl_siz
 	_EXIT_OK			; "/dev/null" is always OK (7)
 
 ci_rnd:
