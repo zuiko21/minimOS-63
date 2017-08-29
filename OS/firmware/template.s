@@ -1,8 +1,8 @@
 ; firmware for minimOS·63
 ; sort-of generic template, but intended for KERAton
-; v0.6a12
+; v0.6a13
 ; (c)2017 Carlos J. Santisteban
-; last modified 20170826-1859
+; last modified 20170829-2311
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -24,7 +24,7 @@ fw_start:
 	FCC		"boot"				; mandatory filename for firmware
 	FCB		0
 fw_splash:
-	FCC		"0.6a12 firmware for "	; version in comment
+	FCC		"0.6a13 firmware for "	; version in comment
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB		0
@@ -619,6 +619,30 @@ fw_ctx:
 
 #endif
 
+; *** experimental lock with flashing LED on keyboard ***
+; assume PIA on KERAton
+
+led_lock:
+; make sure port B is ready to access keyboard
+	LDAA PIA+CRB			; port B control register
+	ANDA #251			; clear DDR access
+	STAA PIA+CRB			; DDRB mode
+	LDAB PIA+PRB			; previous direction
+	ORAB #$F9			; these bits as output, at least
+	STAB PIA+PRB
+	EORA #4				; toggle DDR access
+	STAA PIA+CRB			; now it is data register B
+	LDAB #$B8			; initial value (LED on, LCD disabled)
+	STAB PIA+PRB			; all set
+; now a loop for LED blinking, toggling PB3
+ll_loop:
+; no need to preset regs as full range of X gives ~0.56s @ 921 kHz
+			INX				; count (4)
+			BNE ll_loop			; until expired (4)
+		EORB #8				; toggle PB3
+		STAB PIA+PRB			; set new value to LED
+		BRA ll_loop			; continue forever
+
 ; ****************************
 ; *** some firmware tables ***
 ; ****************************
@@ -632,7 +656,7 @@ fw_map:
 ; if case of no headers, at least keep machine name somewhere
 #ifdef	NOHEAD
 fw_splash:
-	FCC		"0.6a12 firmware for "
+	FCC		"0.6a13 firmware for "
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB 	0
