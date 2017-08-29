@@ -1,6 +1,6 @@
 ; Monitor shell for minimOS·63 (simple version)
-; v0.6a4
-; last modified 20170808-2343
+; v0.6a5
+; last modified 20170829-1143
 ; (c) 2017 Carlos J. Santisteban
 
 #include "../usual.h"
@@ -320,107 +320,84 @@ help:
 	JMP prnStr			; print it, and return to main loop
 #endif
 
-; ** .K = keep (load or save) **6502
+; ** .K = keep (load or save)
 ; ### highly system dependent ###
 ; placeholder will send (-) or read (+) raw data to/from indicated I/O device
 ext_bytes:
 ; *** set labels from miniMoDA ***
-/*
-count	= tmp2+1		; subcommand
-temp	= cursor		; will store I/O channel
-oper	= tmp			; 16-bit counter
+
+count	EQU	tmp2+1		; subcommand
+temp	EQU	cursor		; will store I/O channel
+oper	EQU	tmp			; 16-bit counter
 ; try to get subcommand, then device
 	JSR getNextChar		; check for subcommand
-	TAY					; already at the end?
+	TSTA					; already at the end?
 	BNE ex_noni			; not yet
 ex_abort:
 		JMP _unrecognised			; fail loudly otherwise
 ex_noni:
 ; there is subcommand, let us check target device ###placeholder
-	STA count			; first save the subcommand!
+	STAA count			; first save the subcommand!
 	JSR fetch_byte		; read desired device
 		BCS ex_abort		; could not get it
-	STA temp			; set as I/O channel
-	LDY #0				; reset counter!
-	STY oper			; also reset forward counter, decrement is too clumsy!
-	STY oper+1
+	STAA temp			; set as I/O channel
+	LDAB #0				; reset counter!
+	STAB oper			; also reset forward counter, decrement is too clumsy!
+	STAB oper+1
 ; check subcommand
+	LDAA count			; restore subcommand
+	CMPA #'+'			; is it load?
+		BEQ ex_load			; OK then
 #ifdef	SAFE
-	LDA count			; restore subcommand
-	CMP #'+'			; is it load?
-		BEQ ex_do			; OK then
-	CMP #'-'			; is it save? (MARATHON MAN)
+	CMPA #'-'			; is it save? (MARATHON MAN)
 		BNE ex_abort		; if not, complain
 #endif
-ex_do:
-; decide what to do
-	LDA count			; restore subcommand
-	CMP #'+'			; is it load?
-	BEQ ex_load			; OK then
-; otherwise assume save!
+; assume save!
+; 6800 should get X ready!
+	LDX ptr				; current pointer
 ; save raw bytes
-		LDA (ptr), Y		; get source data
-		STA io_c			; set parameter
-		_PHY				; save index
-		LDY temp			; get target device
+		LDAA 0,X		; get source data
+		STAA io_c			; set parameter
+		STX ptr				; keep index updated
+		LDAB temp			; get target device
 		_KERNEL(COUT)		; send raw byte!
-		_PLY				; restore index eeeeeeeeeek
 			BCS ex_err			; aborted!
 		BCC ex_next			; otherwise continue, no need for BRA
 ; load raw bytes
 ex_load:
-		_PHY				; save index
-		LDY temp			; get target device
+		LDAB temp			; get target device
 		_KERNEL(CIN)		; get raw byte!
-		_PLY				; restore index
 			BCS ex_err			; aborted!
-		LDA io_c			; get parameter
-		STA (ptr), Y		; write destination data
+		LDAA io_c			; get parameter
+		LDX ptr				; retrieve pointer
+		STAA 0,X		; write destination data
 ; go for next byte in any case
 ex_next:
-		INY					; go for next
-		BNE ex_nw			; no wrap
-			INC ptr+1
-ex_nw:
+		LDX ptr				; worth reloading
+		INX					; go for next
+		STX ptr				; and update!
 ; 16-bit counter INcrement
-		INC oper			; one more
-		BNE ex_sinc			; no wrap
-			INC oper+1
-ex_sinc:
+		LDX oper			; get full value
+		INX				; one more
+		STX oper			; stay updated
 ; have we finished yet?
-		LDA oper			; check LSB
-		CMP siz				; compare against desired size
+		CPX siz				; compare against desired size
 		BNE ex_do			; continue until done
-			LDA oper+1			; check MSB, just in case
-			CMP siz+1			; against size
-		BNE ex_do			; continue until done
-ex_ok:
-; update PC LSB!
-	TYA					; current offset
-	CLC
-	ADC ptr				; add base LSB
-	STA ptr				; update
-	BCC ex_show			; no wrap
-		INC ptr+1			; or carry to MSB
-ex_show:
 ; transfer ended, show results
 #ifndef	SAFE
 ex_err:					; without I/O error message, indicate 0 bytes transferred
 #endif
-	LDA oper			; get LSB
-	PHA					; into stack
-	LDA oper+1			; get MSB
-	PHA					; same
+	LDAA oper+1			; get LSB
+	PSHA					; into stack
+	LDAA oper			; get MSB
+	PSHA					; same
 	JMP nu_end			; and print it! eeeeeek return also
 #ifdef	SAFE
 ex_err:
 ; an I/O error occurred during transfer!
-	LDA #>io_err		; set message pointer
-	LDY #<io_err
-	JSR prnStr			; print it and finish function afterwards
-	_BRA ex_show		; there is nothing to increment!
+	LDX #io_err		; set message pointer
+	JMP prnStr			; print it and finish function afterwards
 #endif
-*/
 
 ; ** .M = move (copy) 'n' bytes of memory **
 move:
@@ -467,7 +444,7 @@ sc_z:
 	PSHB
 
 ; *** common ending for .N and .U ***
-; 16-bit REVERSED value on stack!
+; 16-bit value on stack!
 nu_end:
 	LDX #set_str		; pointer to rest of message
 	JSR prnStr			; print that
