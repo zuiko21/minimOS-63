@@ -1,6 +1,6 @@
 ; Monitor shell for minimOS·63 (simple version)
 ; v0.6a5
-; last modified 20170829-1143
+; last modified 20170829-1237
 ; (c) 2017 Carlos J. Santisteban
 
 #include "../usual.h"
@@ -384,20 +384,21 @@ ex_next:
 		CPX siz				; compare against desired size
 		BNE ex_do			; continue until done
 ; transfer ended, show results
-#ifndef	SAFE
-ex_err:					; without I/O error message, indicate 0 bytes transferred
+#ifdef	SAFE
+	BRA ex_show			; skip error message
 #endif
+ex_err:
+#ifdef	SAFE
+; an I/O error occurred during transfer!
+	LDX #io_err		; set message pointer
+	JSR prnStr			; print it
+#endif
+ex_show:
 	LDAA oper+1			; get LSB
 	PSHA					; into stack
 	LDAA oper			; get MSB
 	PSHA					; same
 	JMP nu_end			; and print it! eeeeeek return also
-#ifdef	SAFE
-ex_err:
-; an I/O error occurred during transfer!
-	LDX #io_err		; set message pointer
-	JMP prnStr			; print it and finish function afterwards
-#endif
 
 ; ** .M = move (copy) 'n' bytes of memory **
 move:
