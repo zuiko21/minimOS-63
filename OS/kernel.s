@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel
-; v0.6a9
+; v0.6a10
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170815-1721
+; last modified 20170830-1734
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -399,7 +399,7 @@ dr_notpq:
 		BCC dr_notrq		; skip installation if task not enabled (4)
 ; worth advancing just the header pointer
 			LDX da_ptr			; work with current header (4)
-			LDX D_REQ,X		; get this pointer (6)
+			LDX D_ASYN,X		; get this pointer (6)
 			STX systmp			; store it ***** check! (5)
 ; prepare another entry into queue
 			LDAA queue_mx		; get index of free A-entry! (4)

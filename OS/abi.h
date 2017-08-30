@@ -1,7 +1,7 @@
-; minimOS·63 0.6a6 API/ABI
+; minimOS·63 0.6a7 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170815-1637
+; last modified 20170830-1732
 ; MASM compliant 20170614, 8-char max names 20170805
 
 ; *************************************************
@@ -111,7 +111,7 @@ D_BOUT	EQU  4		; BLOCK output code
 D_INIT	EQU  6		; device reset procedure
 D_POLL	EQU  8		; periodic interrupt task
 D_FREQ	EQU 10		; frequency for periodic task, new 20170517
-D_REQ	EQU 12		; asynchronous interrupt task
+D_ASYN	EQU 12		; asynchronous interrupt task, renamed 20170830
 D_CNFG	EQU 14		; device configuration, new
 D_STAT	EQU 16		; device status, new
 D_BYE	EQU 18		; shutdown procedure
