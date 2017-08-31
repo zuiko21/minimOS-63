@@ -1,6 +1,6 @@
 ; minimOS·63 zeropage
-; v0.6a7
-; last modified 20170808-2008
+; v0.6a8
+; last modified 20170831-1721
 ; MASM compliant 20170614
 
 	ORG		0
@@ -117,7 +117,6 @@ zaddr3		RMB 4	; ** up to 4 bytes, including older names @ $F0 **
 k_ram		EQU ma_rs+2		; Kernel RAM pages (0 for 128-byte system)
 
 ; *** include aliases here for zpar2/zaddr2 ***
-up_ticks:
 def_io:
 irq_hz
 ma_pt:
@@ -130,7 +129,8 @@ zaddr2		RMB 4	; ** up to 4 bytes, including older names @ $F4 **
 io_c:
 ma_align:
 cpu_ll:
-up_sec:
+up_ticks:			; 32-bit
+up_sec:				; 24-bit bigendian, for source compatibility
 w_rect:				; 32-bit
 
 zpar:

@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
-; v0.6a12
+; v0.6a13
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170828-2205
+; last modified 20170831-1725
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -65,7 +65,7 @@ blout:
 	LDAA #D_BOUT		; offset to be added (2)
 	STAA cio_of			; store safely (4)
 #else
-	CLR cio_of			; zero indicates COUT (6)
+	CLR cio_of			; zero indicates OUT, special faster value (6)
 #endif
 	TSTB				; for indexed comparisons (2)
 	BNE co_port			; not default (4)
@@ -120,16 +120,16 @@ cio_dev:
 #else
 ; generic way follows
 	TST cio_of			; input or output? (6)
-	BNE cio_out			; was output (4)
-		LDX D_CIN,X			; otherwise get input routine pointer (6)
+	BEQ cio_out			; was output eeeeeek (4)
+		LDX D_BLIN,X			; otherwise get input routine pointer (6)
 		JMP 0,X				; not worth reusing code (4...)
 cio_out:
-	LDX D_COUT,X		; faster getting output routine pointer (6)
+	LDX D_BOUT,X		; faster getting output routine pointer (6)
 #endif
 	JMP 0,X				; will return to caller (4...)
 
 ; ****************************
-; *** CIN, get a character ***
+; *** CIN, get a character *** and manage events!
 ; ****************************
 ;		INPUT
 ; acc B	= dev
@@ -142,38 +142,13 @@ cio_out:
 	STX bl_ptr
 	LDX #1				; single byte
 	STX bl_siz
-; ...and fall into BLIN??? ***REVISE***
-
-; ***********************
-; *** BLIN, get block *** REVISE
-; ***********************
-;		INPUT
-; acc B		= dev
-; bl_ptr	= buffer address
-; bl_siz	= maximum transfer
-;		OUTPUT
-; bl_siz	= REMAINING bytes
-; C		= not available
-;		USES dr_id and whatever the driver takes
-; cin_mode is a kernel variable
-
-cin:
-	LDAA #D_CIN			; only difference from cout, as long as is not zero! (2)
-	STAA cio_of			; store for further addition/selection (4)
-	TSTB				; for indexed comparisons (2)
-	BNE ci_port			; specified (4)
-		LDAB std_in			; default input device (3)
-	BNE ci_port			; eeeeeeeeeek (4)
-		LDAB #DEVICE		; *** somewhat ugly hack *** (2)
-ci_port:
-	BPL ci_nph			; logic device (4)
-		JSR cio_phys		; check physical devices and try to get char... but come back for events! (9)
-			BCS ci_exit			; some error, send it back (4)
+	JSR blin			; non-patchable call
+		BCS ci_exit			; error code must be kept
+; now process possible event?
 ; ** EVENT management **
-; this might be revised, or supressed altogether!
-		LDAA io_c			; get received character (3)
-		CMPA #' '-1			; printable? (2)
-			BLS ci_manage		; if not, might be an event (4)
+	LDAA io_c			; get received character (3)
+	CMPA #' '-1			; printable? (2)
+	BLS ci_manage		; if not, might be an event (4)
 ci_exitOK:
 		CLC					; otherwise, no error --- eeeeeeeek! (2)
 ci_exit:
@@ -199,10 +174,36 @@ ci_notdle:
 #ifdef	SAFE
 		CLRB				; sent to all, this is the only one (2)
 #endif
-		JSR signal			; send signal FASTER (9)
+		JSR signal			; send signal (9)
 ci_abort:
 		_ERR(EMPTY)			; no character was received (9)
 
+
+; ***********************
+; *** BLIN, get block ***
+; ***********************
+;		INPUT
+; acc B		= dev
+; bl_ptr	= buffer address
+; bl_siz	= maximum transfer
+;		OUTPUT
+; bl_siz	= REMAINING bytes
+; C		= not available
+;		USES dr_id and whatever the driver takes
+; cin_mode is a kernel variable
+
+blin:
+	LDAA #D_CIN			; only difference from cout, as long as is not zero! (2)
+	STAA cio_of			; store for further addition/selection (4)
+	TSTB				; for indexed comparisons (2)
+	BNE ci_port			; specified (4)
+		LDAB std_in			; default input device (3)
+	BNE ci_port			; eeeeeeeeeek (4)
+		LDAB #DEVICE		; *** somewhat ugly hack *** (2)
+ci_port:
+	BPL ci_nph			; logic device (4)
+		JSR cio_phys		; check physical devices and try to get char... but come back for events! (9)
+			BCS ci_exit			; some error, send it back (4)
 ; *** check for some logical devices ***
 ci_nph:
 ; only logical devs, no need to check for windows or filesystem
@@ -291,7 +292,7 @@ uptime:
 	LDX ticks			; get system variable word (4)
 	STX up_ticks		; and store it in output parameter (5)
 	LDX ticks+2			; get system variable word (4)
-	STX up_sec			; and store it in output parameter (5)
+	STX up_ticks+2			; and store it in output parameter (5)
 	_NO_CRIT			; A was preserved (2)
 	_EXIT_OK			; (7)
 
