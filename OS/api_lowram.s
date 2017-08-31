@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
 ; v0.6a13
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170831-1725
+; last modified 20170831-1808
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -137,7 +137,7 @@ cio_out:
 ; io_c	= char
 ; C		= not available
 ;		USES BLIN
-
+cin:
 	LDX #io_c			; parameter address
 	STX bl_ptr
 	LDX #1				; single byte
@@ -212,29 +212,45 @@ ci_nph:
 	CMPB #DEV_NULL		; lastly, ignore input (2)
 		BNE cio_nfound		; final error otherwise (4)
 ; otherwise must fill buffer with zeroes like /dev/zero!!!
-	LDAA bl_ptr		; get pointer
-	LDAB bl_ptr+1
-	ADDB bl_siz+1		; add size for last address
-	ADCA bl_siz
-	STAA local1		; store pointer for X...
-	STAB local1+1
-	LDX local1		; get end address (+1)
+	BSR ci_last		; get end address (+1)
 	LDAA #0			; STAA is faster than CLR
 ci_nl:
 		DEX			; reverse loop
 		STAA 0,X		; clear byte
 		CPX bl_ptr		; compare against buffer start
 		BNE ci_nl		; until done
+cinr_end:
 	LDX #0			; no remaining bytes
 	STX bl_siz
-	_EXIT_OK			; "/dev/null" is always OK (7)
+	_EXIT_OK			; "/dev/null" and "/dev/rnd" are always OK (7)
 
 ci_rnd:
-; *** generate random number ***
-	LDAA ticks+1		; simple placeholder (3)
-	STAA io_c			; eeeeeeek (4)
-	_EXIT_OK			; (7)
+; *** generate random number *** placeholder
+	BSR ci_last		; get end address (+1)
+ci_rl:
+		DEX			; reverse loop
+		LDAA ticks+3		; simple placeholder (3)
+		STAA 0,X		; clear byte
+		CPX bl_ptr		; compare against buffer start
+		BNE ci_rl		; until done
+	BRA binr_end		; clear remaining and exit (4)
 
+; *** common routine (NULL & RND) for computing last address (+1) in buffer ***
+ci_last:
+#ifdef	MC6801
+	LDD bl_ptr		; get pointer
+	ADDD bl_siz		; add size for last address
+	STD local1		; store pointer for X...
+#else
+	LDAA bl_ptr		; get pointer
+	LDAB bl_ptr+1
+	ADDB bl_siz+1		; add size for last address
+	ADCA bl_siz
+	STAA local1		; store pointer for X...
+	STAB local1+1
+#endif
+	LDX local1		; get end address (+1)
+	RTS
 
 ; **************************************
 ; *** OPEN_W, get I/O port or window ***
@@ -361,7 +377,7 @@ signal:
 	CMPA #SIGTERM		; clean shutdown? (2)
 	BNE sig_suic		; no, check for KILL then (4)
 ; 6800 SIGTERM handlers end in RTS, thus a pretty standard jump is OK
-; please note that it should clear C in case of no problems! 
+; please note that it should clear C in case of no problems!
 		LDX mm_sterm		; pointer to handler (4)
 		JMP 0,X				; will return to caller (4)
 sig_suic:
@@ -517,7 +533,7 @@ ll_valid:
 
 
 ; *********************************
-; *** STRING, prints a C-string *** REVISE
+; *** STRING, prints a C-string ***
 ; *********************************
 ;		INPUT
 ; acc B		= dev
@@ -527,26 +543,21 @@ ll_valid:
 ;		USES iol_dev, loc_str and whatever COUT takes
 
 string:
-	STAB iol_dev		; save device (4)
-	LDX str_pt			; get pointer (4)
+;	STAB iol_dev		; save device (4)
+	LDX #0			; clear measured size (3+5)
+	STX bl_siz
+	LDX str_pt		; get pointer (4)
+;	STX bl_ptr		; not needed if the same parameter!
 str_loop:
 		LDAA 0,X			; get character (5)
 			BEQ str_end			; NUL = end-of-string (4)
-		STAA io_c			; store output character for COUT (4)
-		STX loc_str			; save current index (5)
-		LDAB iol_dev		; retrieve device number (3)
-		_KERNEL(COUT)		; call routine (...)
-#ifdef	SAFE
-			BCS str_abort		; extra check, nothing more to restore (4)
-#endif
-		LDX loc_str			; retrieve index (4)
-		INX					; eeeeeeeek! (4)
-		BRA str_loop		; repeat, will later check for termination (4)
+		INX				; try next otherwise
+		INC bl_siz+1			; increment LSB
+			BNE str_loop			; contimue if no wrap
+		INC bl_siz			; or update MSB
+		BRA str_loop
 str_end:
-	CLC					; no errors (2)
-str_abort:
-	RTS					; return possible error code (5)
-
+	JMP blout		; proceed and return!
 
 ; ******************************
 ; *** READLN, buffered input *** new 20161223
