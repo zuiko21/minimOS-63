@@ -1,7 +1,7 @@
 ; minimOS·63 basic I/O driver for visual6800 simulator
-; v0.9a3
+; v0.9a4
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170809-1136
+; last modified 20170831-1638
 
 #include	"../usual.h"
 ; *** begins with sub-function addresses table ***
@@ -21,7 +21,7 @@
 
 ; *** info string ***
 debug_info:
-	FCC		"Console I/O driver for visual6800 simulator 0.9a3"
+	FCC		"Console I/O driver for visual6800 simulator 0.9a4"
 	FCB		0
 
 ; *** output ***
@@ -48,7 +48,7 @@ kow_ncr:
 kow_rts:
 	_DR_OK
 
-; *** input ***
+; *** input *** single-byte stub
 kow_cin:
 #ifdef	SAFE
 	LDX bl_siz			; original size
@@ -64,15 +64,14 @@ kow_il:
 			LDAA #CR			; or convert to CR
 kow_emit:
 		STAA 0,X			; store result otherwise
-		INX				; point to next eeeeeeeeeeeek
+;		INX				; point to next eeeeeeeeeeeek
 		DEC bl_siz+1			; one less to go
-			BNE kow_il			; continue...
-		LDAA bl_siz			; check MSB value
-			BEQ kow_rts			; no more...!
-		DEC bl_siz			; ...or update MSB
-		BRA kow_il
+		LDAA bl_siz+1			; check value
+		CMPA #$FF			; wraps?
+		BNE kow_rts			; ...and we are done
+			DEC bl_siz			; ...or update MSB
+		BRA kow_rts
 kow_empty:
-	LDX #0				; 0 bytes...
-	STX bl_siz			; ...actually transferred
-kow_err:
 	_DR_ERR(EMPTY)			; nothing yet
+kow_err:
+	_DR_ERR(UNAVAIL)		; generic error?
