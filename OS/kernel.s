@@ -2,7 +2,7 @@
 ; v0.6a11
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170902-1305
+; last modified 20170902-1532
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -116,19 +116,16 @@ ram_init:
 ; ************************************************
 ; sometime will create API entries for these, but new format is urgent!
 ; * will also initialise I/O lock arrays! * 20161129
+; completely separate standard & LOWRAM versions 20170902
 
+#ifndef	LOWRAM
+; ++++++ ++++++ standard version ++++++ ++++++
 ; *** 1) initialise stuff ***
 ; clear some bytes
 	CLRB				; reset driver index (2)
 	STAB queue_mx		; reset all indexes, faster than CLR (5+5)
 	STAB queue_mx+1		; not worth doing LDX#/STX as same bytes and only one cycle faster
 
-#ifdef LOWRAM
-; ------ low-RAM systems have no direct tables to reset ------
-; ** maybe look for fast tables in ROM **
-	STAB drv_num		; single index of, not necessarily SUCCESSFULLY, detected drivers, updated 20150318 (5)
-; ------
-#else
 ; ++++++ new direct I/O tables for much faster access 20160406 ++++++
 	STAB run_pid		; new 170222, set default running PID
 ; this must be done BEFORE initing drivers as multitasking should place appropriate temporary value via SET_CURR! (5)
@@ -156,11 +153,9 @@ dr_lclear:
 		BSR dr_clrio		; shared code! (8+25)
 		CPX #cio_lock+256	; all done? (3+4)
 		BNE dr_lclear
-; ++++++
-#endif
 
 ; *** 2) prepare access to each driver header ***
-; first get the pointer to each driver table
+; first get the pointer to it
 drv_aix	EQU		systmp	; temporary pointer, *** might go into locals ***
 
 	LDX #drvrs_ad		; driver table in ROM (3)
@@ -187,7 +182,7 @@ dr_clrio:
 
 dr_inst:
 		STX da_ptr			; store pointer to header (5) *** but check new variable conflicts! ***
-; create entry on IDs table
+; is it worth storing ID?
 		LDAA D_ID,X			; get ID code (5)
 		STAA dr_id			; keep in local variable as will be often used (4)
 #ifdef	SAFE
@@ -225,7 +220,6 @@ dr_nabort:
 dr_succ:
 
 ; *** 4) driver should be OK to install, just check whether this ID was not in use ***
-#ifndef	LOWRAM
 ; ++++++ new faster driver list ++++++
 		BSR dr_outptr		; get pointer to output routine (8+28)
 		CPX #dr_error		; check whether something was installed (3)
@@ -303,27 +297,6 @@ dr_empty:
 		STX dr_iopt			; *** new temporary, will hold address to write into entry (5)
 		BSR dr_outptr		; locate entry for output according to ID! X points to entry (8+28)
 		BSR dr_setpt		; using B, copy dr_iopt into (X) (8+29)
-; ++++++
-#else
-; ------ IDs table filling for low-RAM systems ------
-; check whether the ID is already in use
-		LDX #drvrs_id		; beginning of ID list (3)
-		LDAA dr_id			; fetch aspiring ID (3)
-		LDAB drv_num		; number of drivers registered this far (3)
-		BEQ dr_eol			; already at end of list (4)
-dr_scan:
-#ifdef	SAFE
-			CMPA 0,X			; compare with list entry (5)
-				BEQ dr_abort		; already in use, don't register (4)
-#endif
-			INX					; otherwise try next one (4)
-			DECB				; one less to go (2+4)
-			BNE dr_scan
-dr_eol:
-; supposedly no conflicting IDs found, or at least pointer set after last one
-		STAA 0,X			; store in list, now in RAM (6)
-; ------
-#endif
 
 ; *** 5) register interrupt routines *** new, much cleaner approach ***** REVISE
 		LDAA dr_feat		; get original auth code (3)
@@ -431,28 +404,10 @@ dr_notpq:
 dr_notrq:
 
 ; *** 6) continue initing drivers ***
-		BRA dr_next			; if arrived here, did not fail initialisation (4)
-
+; if arrived here, did not fail initialisation, no difference on standard version
 dr_abort:
 ; *** if arrived here, driver initialisation failed in some way! ***
-#ifdef	LOWRAM
-; ------ low-RAM systems keep count of installed drivers ------
-			LDX #drvrs_id		; beginning of ID list (3)
-			LDAB drv_num		; number of drivers registered this far (3)
-dr_ablst:
-				INX					; advance pointer (4)
-				DECB				; one less (2)
-				BNE dr_ablst		; acc B will never start at 0! (4)
-			LDAB #DEV_NULL		; invalid proper value... (2)
-			STAB 0,X			; ...as unreachable entry (6)
-; ------
-#endif
 dr_next:
-#ifdef	LOWRAM
-; ------ low-RAM systems keep count of installed drivers ------
-		INC drv_num			; update SINGLE index (6)
-; ------
-#endif
 ; in order to keep drivers_ad in ROM, can't just forget unsuccessfully registered drivers...
 ; in case drivers_ad is *created* in RAM, dr_abort could just be here, is this OK with new separate pointer tables?
 		LDX drv_aix			; retrieve saved index (4)
@@ -508,21 +463,278 @@ dr_nextq:
 	INX
 	STX systmp			; this has to be updated (5+5)
 	RTS
+; ++++++ ++++++ end of standard version ++++++ ++++++
+
+#else
+
+; ------ ------ LOWRAM version complete here ------ ------
+; *** 1) initialise stuff ***
+; clear some bytes
+	CLRB				; reset driver index (2)
+	STAB queue_mx		; reset all indexes, faster than CLR (5+5)
+	STAB queue_mx+1		; not worth doing LDX#/STX as same bytes and only one cycle faster
+; ------ low-RAM systems have no direct tables to reset ------
+; ** maybe look for fast tables in ROM **
+	STAB drv_num		; single index of, not necessarily SUCCESSFULLY, detected drivers, updated 20150318 (5)
+; *** 2) prepare access to each driver header ***
+; first get the pointer to it
+drv_aix	EQU		systmp	; temporary pointer, *** might go into locals ***
+
+	LDX #drvrs_ad		; driver table in ROM (3)
+dr_loop:
+		STX drv_aix			; reset index (5)
+		LDX 0,X				; get current pointer (6)
+		BNE dr_inst			; cannot be zero, in case is too far for BEQ dr_ok (4)
+			JMP dr_ok			; all done otherwise (3)
+dr_inst:
+		STX da_ptr			; store pointer to header (5) *** but check new variable conflicts! ***
+; create entry on IDs table
+		LDAA D_ID,X			; get ID code (5)
+		STAA dr_id			; keep in local variable as will be often used (4)
+#ifdef	SAFE
+		BMI dr_phys			; only physical devices (4)
+			JMP dr_abort		; reject logical devices (3)
+dr_phys:
+#endif
+		LDAA D_AUTH,X		; get provided features (5)
+		STAA dr_feat		; another commonly used value (will stay during check) (4)
+; *** 3) before registering, check whether the driver COULD be successfully installed ***
+; that means 1) there must be room enough on the interrupt queues for its tasks, if provided
+; and 2) the D_INIT routine succeeded as usual
+; otherwise, skip the installing procedure altogether for that driver
+		ASLA				; extract MSb (will be A_POLL first) (2)
+		BCC dr_nptsk		; skip verification if task not enabled (4)
+			LDAB queue_mx+1		; get current tasks in P queue (4)
+			CMPB #MAX_QUEUE		; room for another? (2)
+				BCC dr_nabort		; if not, just abort! (4)
+dr_nptsk:
+		ASLA				; extract MSb (now is A_REQ) (2)
+		BCC dr_nrtsk		; skip verification if task not enabled (4)
+			LDAB queue_mx		; get current tasks in A queue (4)
+			CMPB #MX_QUEUE		; room for another? (2)
+				BCC dr_nabort		; did not check OK (4)
+dr_nrtsk:
+; if arrived here, there is room for interrupt tasks, but check init code
+#ifdef	SAFE
+		STAA dr_aut			; *** will save it here for later... (4)
+#endif
+		JSR D_INIT,X		; like dr_icall, call D_INIT routine! (8...)
+		BCC dr_succ			; successfull, proceed (4)
+dr_nabort:
+			JMP dr_abort		; or did not checked OK (3)
+dr_succ:
+
+; *** 4) driver should be OK to install, just check whether this ID was not in use ***
+; ------ IDs table filling for low-RAM systems ------
+; check whether the ID is already in use
+		LDX #drvrs_id		; beginning of ID list (3)
+		LDAA dr_id			; fetch aspiring ID (3)
+		LDAB drv_num		; number of drivers registered this far (3)
+		BEQ dr_eol			; already at end of list (4)
+dr_scan:
+#ifdef	SAFE
+			CMPA 0,X			; compare with list entry (5)
+				BEQ dr_abort		; already in use, don't register (4)
+#endif
+			INX					; otherwise try next one (4)
+			DECB				; one less to go (2+4)
+			BNE dr_scan
+dr_eol:
+; supposedly no conflicting IDs found, or at least pointer set after last one
+		STAA 0,X			; store in list, now in RAM (6)
+; *** 5) register interrupt routines *** new, much cleaner approach ***** REVISE
+		LDAA dr_feat		; get original auth code (3)
+		STAA dr_aut			; and keep for later! (4)
+; all set now, now easier to use a loop, not sure on 6800
+; preliminary 6800 does NOT use a loop
+; let us go for P-queue first
+		ASL dr_aut			; extract MSB (will be A_POLL first, then A_REQ)
+		BCC dr_notpq		; skip installation if task not enabled (4)
+; time to get a pointer to the-block-of-pointers (source)
+			LDX da_ptr			; work with current header (4)
+			LDX D_POLL,X		; get this pointer (6)
+			STX systmp			; store it ***** check! (5)
+; prepare another entry into queue
+			LDAA queue_mx+1		; get index of free P-entry! (4)
+			TAB					; two copies (2)
+#ifdef	MC6801
+; MCUs do much better
+			LDX #drv_poll		; whole pointer... (3)
+			ABX					; ...gets increased... (3)
+			STX dq_ptr			; ...and stored (4)
+#else
+			ADDB #<drv_poll		; add to base of queue (2)
+			STAB dq_ptr+1		; LSB is ready (4)
+			LDAB #>drv_poll		; go for MSB (2)
+			ADCB #0				; propagate carry (2)
+			STAB dq_ptr			; complete pointer (4)
+#endif
+; flags must be enabled for this task!
+			TAB					; get queue index again (2)
+#ifdef	MC6801
+; again, MCUs do much better
+			LDX #drv_p_en		; whole pointer... (3)
+			ABX					; ...gets increased (3)
+#else
+			ADDB #<drv_p_en		; add to base of queue (2)
+			STAB dte_ptr+1		; LSB is ready (4)
+			LDAB #>drv_p_en		; go for MSB (2)
+			ADCB #0				; propagate carry (2)
+			STAB dte_ptr		; complete pointer (4)
+; pointer to enable-array is ready, fill it!
+			LDX dte_ptr			; MCUs waive this (4)
+#endif
+			LDAB dr_id			; use ID as enabling value, as has bit 7 high (3)
+			STAB 0,X			; enabled! (6)
+; an entry is being inserted, thus update counter
+			ADDA #2				; another entry added (A had original count) (2)
+			STAA queue_mx+1		; update P-counter (5)
+; insert task and advance queue
+			BSR dr_itask		; install entry into queue (8+35, 8+23 MCU)
+			BSR dr_nextq		; and advance to next! (frequency) (8+40, 8+28 MCU)
+; the currently pointed word is freq value, just copy it into currently pointed queue
+			BSR dr_itask		; install entry into queue, no need to advance (8+35, 8+23 MCU)
+			INC 0,X				; *** increment MSB as expected by ISR implementation ***
+; ...but copy too into drv_count! eeeeeeeeeeeeeeeeeeek
+			LDAB 0,X			; get original MSB (increased)
+			STAB MX_QUEUE*4,X	; ...and preset counters!!!
+			LDAB 1,X			; same for LSB
+			STAB MX_QUEUE*4+1,X
+; P-queue is done, let us go to simpler R-queue
+dr_notpq:
+		ASL dr_aut			; extract MSB (now is A_REQ) (6)
+		BCC dr_notrq		; skip installation if task not enabled (4)
+; worth advancing just the header pointer
+			LDX da_ptr			; work with current header (4)
+			LDX D_ASYN,X		; get this pointer (6)
+			STX systmp			; store it ***** check! (5)
+; prepare another entry into queue
+			LDAA queue_mx		; get index of free A-entry! (4)
+			TAB					; two copies (2)
+#ifdef	MC6801
+; MCUs do much better
+			LDX #drv_poll		; whole pointer... (3)
+			ABX					; ...gets increased... (3)
+			STX dq_ptr			; ...and stored (4)
+#else
+			ADDB #<drv_poll		; add to base of queue (2)
+			STAB dq_ptr+1		; LSB is ready (4)
+			LDAB #>drv_poll		; go for MSB (2)
+			ADCB #0				; propagate carry (2)
+			STAB dq_ptr			; complete pointer (4)
+#endif
+; flags must be enabled for this task!
+			TAB					; get queue index again (2)
+#ifdef	MC6801
+; again, MCUs do much better
+			LDX #drv_p_en		; whole pointer... (3)
+			ABX					; ...gets increased... (3)
+#else
+			ADDB #<drv_r_en		; add to base of queue (2)
+			STAB dte_ptr+1		; LSB is ready (4)
+			LDAB #>drv_r_en		; go for MSB (2)
+			ADCB #0				; propagate carry (2)
+			STAB dte_ptr		; complete pointer (4)
+; pointer to enable-array is ready, fill it!
+			LDX dte_ptr			; MCUs waive this (4)
+#endif
+			LDAB dr_id			; use ID as enabling value, as has bit 7 high (3)
+			STAB 0,X			; enabled! (6)
+; an entry is being inserted, thus update counter
+			ADDA #2				; another entry added (A had original count) (2)
+			STAA queue_mx		; update A-counter (5)
+; insert task, no need to advance queues any more
+			BSR dr_itask		; install entry into queue (8+35, 8+23 MCU)
+dr_notrq:
+
+
+; *** 6) continue initing drivers ***
+		BRA dr_next			; if arrived here, did not fail initialisation (4)
+dr_abort:
+; *** if arrived here, driver initialisation failed in some way! ***
+			LDX #drvrs_id		; beginning of ID list (3)
+			LDAB drv_num		; number of drivers registered this far (3)
+dr_ablst:
+				INX					; advance pointer (4)
+				DECB				; one less (2)
+				BNE dr_ablst		; acc B will never start at 0! (4)
+			LDAB #DEV_NULL		; invalid proper value... (2)
+			STAB 0,X			; ...as unreachable entry (6)
+dr_next:
+; ------ low-RAM systems keep count of installed drivers ------
+		INC drv_num			; update SINGLE index (6)
+; in order to keep drivers_ad in ROM, can't just forget unsuccessfully registered drivers...
+; in case drivers_ad is *created* in RAM, dr_abort could just be here, is this OK with new separate pointer tables?
+		LDX drv_aix			; retrieve saved index (4)
+		INX					; update ADDRESS index, even if unsuccessful (4)
+		INX					; eeeeeeeek! pointer arithmetic! (4)
+		JMP dr_loop			; go for next (3)
+
+; *****************************************
+; *** some driver installation routines ***
+; *****************************************
+
+; * routine for copying a pointer from header into a table, plus advance to next queue *
+; sysptr & dq_ptr (will NOT get updated) set as usual
+dr_itask:
+; *** preliminary 6800 version, room to optimise ***
+; read address from header and update it!
+	LDX systmp			; get set pointer (4)
+#ifdef	MC6801
+	LDD 0,X				; MCUs get the whole word! (5)
+	LDX dq_ptr			; switch pointer (4)
+	STD 0,X				; MCUs store whole word! (5)
+#else
+	LDAA 0,X			; indirect read MSB (5)
+	LDAB 1,X			; and LSB (5)
+	LDX dq_ptr			; switch pointer (4)
+	STAA 0,X			; store fetched task pointer (6)
+	STAB 1,X			; LSB too (6+5)
+#endif
+; in any case, exits with X pointing as dq_ptr *** needed after freq setting
+; write pointer into queue
+	RTS
+
+; * routine for advancing to next queue *
+; both pointers in dq_ptr (whole queue size) and sysptr (next word in header)
+; likely to get inlined as used only once just after dr_itask
+dr_nextq:
+; update the original pointer
+	LDAB #MX_QUEUE		; amount to add... (2)
+#ifdef	MC6801
+; MCUs do it much better!
+	ABX					; ...to X which had dq_ptr as per previous dr_itask... (3)
+	STX dq_ptr			; ...gets updated! (4)
+#else
+	ADDB dq_ptr+1		; ...to previous LSB (3)
+	LDAA dq_ptr			; MSB too (3)
+	ADCA #0				; propagate carry (2)
+	STAB dq_ptr+1		; update values (4)
+	STAA dq_ptr			; ready! (4)
+#endif
+; and now the header reading pointer
+	LDX systmp			; get set pointer (4)
+	INX					; go for next entry (4+4)
+	INX
+	STX systmp			; this has to be updated (5+5)
+	RTS
+
+; in case no I/O lock arrays were initialised... only for LOWRAM
+	CLR cin_mode		; single flag for non-multitasking systems (6)
+
+; ------ ------ end of LOWRAM version------ ------
+#endif
 
 ; ***************************************************************
 ; *** drivers already installed, clean up things and continue ***
 ; ***************************************************************
-dr_ok:					; *** all drivers inited ***
+dr_ok:
+; *** all drivers inited ***
 ; really no need to terminate ID list on LOWRAM systems
 
 ; **********************************
 ; ********* startup code ***********
 ; **********************************
-
-; in case no I/O lock arrays were initialised... only for LOWRAM
-#ifdef	LOWRAM
-	CLR cin_mode		; single flag for non-multitasking systems (6)
-#endif
 
 ; startup code, revise ASAP
 ; *** set GLOBAL default I/O device ***
