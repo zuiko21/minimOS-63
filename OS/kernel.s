@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel
-; v0.6a10
+; v0.6a11
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170830-1734
+; last modified 20170902-1305
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -39,7 +39,7 @@ kern_head:
 	FCC		"kernel"		; filename
 	FCB		0
 kern_splash:
-	FCC		"minimOS·63 0.6a9"	; version in comment
+	FCC		"minimOS·63 0.6a11"	; version in comment
 	FCB		0
 
 	FILL	$FF, kern_head+$F8-*		; padding
@@ -142,12 +142,12 @@ ram_init:
 	LDX #drv_opt		; output routines array (3)
 dr_oclear:
 		BSR dr_clrio		; shared code! (8+25)
-		CPX #drv_opt+256	; all done? (3+4)
+		CPX #drv_opt+256	; all done? (3+4) might use reduced array
 		BNE dr_oclear
 	LDX #drv_ipt		; input routines array (3)
 dr_iclear:
 		BSR dr_clrio		; shared code! (8+25)
-		CPX #drv_ipt+256	; all done? (3+4)
+		CPX #drv_ipt+256	; all done? (3+4) might use reduced array
 		BNE dr_iclear
 	LDX #cio_lock		; will clear I/O locks and binary flags! (3)
 	CLRA				; zero is to be stored, both arrays interleaved! (2+2)
@@ -294,25 +294,15 @@ dr_iopx:
 dr_empty:
 
 ; *** 4b) Set I/O pointers (if memory allows) ***
-; might check here whether I/O are provided!
-#ifdef	SAFE
-		ASL dr_aut			; continue with bit shifting! (6)
-		BCC dr_seto			; no input for this! (4)
-#endif
-			LDX D_BLIN,X		; get input routine address, this X=6502 sysptr (6)
-			STX dr_iopt			; *** new temporary, will hold address to write into entry (5)
-			BSR dr_inptr		; locate entry for input according to ID! X points to entry (8+34)
-			BSR dr_setpt		; using B, copy dr_iopt into (X) (8+29)
-dr_seto:
-#ifdef	SAFE
-		ASL dr_aut			; look for COUT now (6)
-		BCC dr_nout			; no output for this! (4)
-#endif
-			LDX D_BOUT,X		; get output routine address, this X=6502 sysptr (6)
-			STX dr_iopt			; *** new temporary, will hold address to write into entry (5)
-			BSR dr_outptr		; locate entry for output according to ID! X points to entry (8+28)
-			BSR dr_setpt		; using B, copy dr_iopt into (X) (8+29)
-dr_nout:
+; no longer checks I/O availability as all drivers must provide at least dummy pointers
+		LDX D_BLIN,X		; get input routine address, this X=6502 sysptr (6)
+		STX dr_iopt			; *** new temporary, will hold address to write into entry (5)
+		BSR dr_inptr		; locate entry for input according to ID! X points to entry (8+34)
+		BSR dr_setpt		; using B, copy dr_iopt into (X) (8+29)
+		LDX D_BOUT,X		; get output routine address, this X=6502 sysptr (6)
+		STX dr_iopt			; *** new temporary, will hold address to write into entry (5)
+		BSR dr_outptr		; locate entry for output according to ID! X points to entry (8+28)
+		BSR dr_setpt		; using B, copy dr_iopt into (X) (8+29)
 ; ++++++
 #else
 ; ------ IDs table filling for low-RAM systems ------
@@ -604,7 +594,7 @@ k_swi:
 ; in headerless builds, keep at least the splash string
 #ifdef	NOHEAD
 kern_splash:
-	FCC		"minimOS·63 0.6a9"
+	FCC		"minimOS·63 0.6a11"
 	FCB		0
 #endif
 
