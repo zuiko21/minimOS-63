@@ -2,7 +2,7 @@
 ; v0.6a11
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170902-1532
+; last modified 20170902-1914
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -156,7 +156,8 @@ dr_lclear:
 
 ; *** 2) prepare access to each driver header ***
 ; first get the pointer to it
-drv_aix	EQU		systmp	; temporary pointer, *** might go into locals ***
+
+drv_aix	EQU		systmp	; temporary pointer, *** MUST go into locals ***
 
 	LDX #drvrs_ad		; driver table in ROM (3)
 dr_loop:
@@ -184,6 +185,7 @@ dr_inst:
 		STX da_ptr			; store pointer to header (5) *** but check new variable conflicts! ***
 ; is it worth storing ID?
 		LDAA D_ID,X			; get ID code (5)
+; unlike the 65xx version, keeping an ID copy is needed
 		STAA dr_id			; keep in local variable as will be often used (4)
 #ifdef	SAFE
 		BMI dr_phys			; only physical devices (4)
@@ -191,7 +193,7 @@ dr_inst:
 dr_phys:
 #endif
 		LDAA D_AUTH,X		; get provided features (5)
-		STAA dr_feat		; another commonly used value (will stay during check) (4)
+		STAA dr_feat		; keep for later use (4)
 
 ; *** 3) before registering, check whether the driver COULD be successfully installed ***
 ; that means 1) there must be room enough on the interrupt queues for its tasks, if provided
@@ -210,9 +212,6 @@ dr_nptsk:
 				BCC dr_nabort		; did not check OK (4)
 dr_nrtsk:
 ; if arrived here, there is room for interrupt tasks, but check init code
-#ifdef	SAFE
-		STAA dr_aut			; *** will save it here for later... (4)
-#endif
 		JSR D_INIT,X		; like dr_icall, call D_INIT routine! (8...)
 		BCC dr_succ			; successfull, proceed (4)
 dr_nabort:
@@ -226,7 +225,7 @@ dr_succ:
 			BNE dr_nabort		; pointer was not empty (4)
 		BSR dr_inptr		; get pointer to input routine (8+34)
 		CPX #dr_error		; check whether something was installed (3)
-			BEQ dr_nabort		; already in use (4)
+			BNE dr_nabort		; already in use (4)
 		BRA dr_empty		; was empty, OK (4)
 
 ; ********************************************
@@ -299,20 +298,18 @@ dr_empty:
 		BSR dr_setpt		; using B, copy dr_iopt into (X) (8+29)
 
 ; *** 5) register interrupt routines *** new, much cleaner approach ***** REVISE
-		LDAA dr_feat		; get original auth code (3)
-		STAA dr_aut			; and keep for later! (4)
-; all set now, now easier to use a loop, not sure on 6800
+; can use dr_feat directly as will no longer be used
 ; preliminary 6800 does NOT use a loop
 ; let us go for P-queue first
-		ASL dr_aut			; extract MSB (will be A_POLL first, then A_REQ)
+		ASL dr_feat			; extract MSB (will be A_POLL first, then A_REQ)
 		BCC dr_notpq		; skip installation if task not enabled (4)
 ; time to get a pointer to the-block-of-pointers (source)
 			LDX da_ptr			; work with current header (4)
 			LDX D_POLL,X		; get this pointer (6)
 			STX systmp			; store it ***** check! (5)
 ; prepare another entry into queue
-			LDAA queue_mx+1		; get index of free P-entry! (4)
-			TAB					; two copies (2)
+			LDAB queue_mx+1		; get index of free P-entry! (4)
+			TBA				; save for later (2)
 #ifdef	MC6801
 ; MCUs do much better
 			LDX #drv_poll		; whole pointer... (3)
@@ -326,12 +323,12 @@ dr_empty:
 			STAB dq_ptr			; complete pointer (4)
 #endif
 ; flags must be enabled for this task!
-			TAB					; get queue index again (2)
 #ifdef	MC6801
-; again, MCUs do much better
+; again, MCUs do much better, B was kept too
 			LDX #drv_p_en		; whole pointer... (3)
 			ABX					; ...gets increased (3)
 #else
+			TAB			; get queue index again, saving 1 byte (2)
 			ADDB #<drv_p_en		; add to base of queue (2)
 			STAB dte_ptr+1		; LSB is ready (4)
 			LDAB #>drv_p_en		; go for MSB (2)
@@ -358,7 +355,7 @@ dr_empty:
 			STAB MX_QUEUE*4+1,X
 ; P-queue is done, let us go to simpler R-queue
 dr_notpq:
-		ASL dr_aut			; extract MSB (now is A_REQ) (6)
+		ASL dr_feat			; extract MSB (now is A_REQ) (6)
 		BCC dr_notrq		; skip installation if task not enabled (4)
 ; worth advancing just the header pointer
 			LDX da_ptr			; work with current header (4)
@@ -380,12 +377,12 @@ dr_notpq:
 			STAB dq_ptr			; complete pointer (4)
 #endif
 ; flags must be enabled for this task!
-			TAB					; get queue index again (2)
 #ifdef	MC6801
 ; again, MCUs do much better
 			LDX #drv_p_en		; whole pointer... (3)
 			ABX					; ...gets increased... (3)
 #else
+			TAB					; get queue index again (2)
 			ADDB #<drv_r_en		; add to base of queue (2)
 			STAB dte_ptr+1		; LSB is ready (4)
 			LDAB #>drv_r_en		; go for MSB (2)
@@ -402,8 +399,9 @@ dr_notpq:
 ; insert task, no need to advance queues any more
 			BSR dr_itask		; install entry into queue (8+35, 8+23 MCU)
 dr_notrq:
-
 ; *** 6) continue initing drivers ***
+		BRA dr_next			; if arrived here, did not fail initialisation (4)
+
 ; if arrived here, did not fail initialisation, no difference on standard version
 dr_abort:
 ; *** if arrived here, driver initialisation failed in some way! ***
@@ -424,7 +422,7 @@ dr_next:
 dr_itask:
 ; *** preliminary 6800 version, room to optimise ***
 ; read address from header and update it!
-	LDX systmp			; get set pointer (4)
+	LDX systmp			; get set pointer***** (4)
 #ifdef	MC6801
 	LDD 0,X				; MCUs get the whole word! (5)
 	LDX dq_ptr			; switch pointer (4)
@@ -442,7 +440,7 @@ dr_itask:
 
 ; * routine for advancing to next queue *
 ; both pointers in dq_ptr (whole queue size) and sysptr (next word in header)
-; likely to get inlined as used only once just after dr_itask 
+; likely to get inlined as used only once just after dr_itask
 dr_nextq:
 ; update the original pointer
 	LDAB #MX_QUEUE		; amount to add... (2)
@@ -458,7 +456,7 @@ dr_nextq:
 	STAA dq_ptr			; ready! (4)
 #endif
 ; and now the header reading pointer
-	LDX systmp			; get set pointer (4)
+	LDX systmp			; get set pointer***** (4)
 	INX					; go for next entry (4+4)
 	INX
 	STX systmp			; this has to be updated (5+5)
@@ -478,11 +476,12 @@ dr_nextq:
 	STAB drv_num		; single index of, not necessarily SUCCESSFULLY, detected drivers, updated 20150318 (5)
 ; *** 2) prepare access to each driver header ***
 ; first get the pointer to it
+
 drv_aix	EQU		systmp	; temporary pointer, *** might go into locals ***
 
 	LDX #drvrs_ad		; driver table in ROM (3)
 dr_loop:
-		STX drv_aix			; reset index (5)
+		STX drv_aix			; keep index (5)
 		LDX 0,X				; get current pointer (6)
 		BNE dr_inst			; cannot be zero, in case is too far for BEQ dr_ok (4)
 			JMP dr_ok			; all done otherwise (3)
@@ -515,9 +514,6 @@ dr_nptsk:
 				BCC dr_nabort		; did not check OK (4)
 dr_nrtsk:
 ; if arrived here, there is room for interrupt tasks, but check init code
-#ifdef	SAFE
-		STAA dr_aut			; *** will save it here for later... (4)
-#endif
 		JSR D_INIT,X		; like dr_icall, call D_INIT routine! (8...)
 		BCC dr_succ			; successfull, proceed (4)
 dr_nabort:
@@ -543,12 +539,9 @@ dr_eol:
 ; supposedly no conflicting IDs found, or at least pointer set after last one
 		STAA 0,X			; store in list, now in RAM (6)
 ; *** 5) register interrupt routines *** new, much cleaner approach ***** REVISE
-		LDAA dr_feat		; get original auth code (3)
-		STAA dr_aut			; and keep for later! (4)
-; all set now, now easier to use a loop, not sure on 6800
 ; preliminary 6800 does NOT use a loop
 ; let us go for P-queue first
-		ASL dr_aut			; extract MSB (will be A_POLL first, then A_REQ)
+		ASL dr_feat			; extract MSB (will be A_POLL first, then A_REQ)
 		BCC dr_notpq		; skip installation if task not enabled (4)
 ; time to get a pointer to the-block-of-pointers (source)
 			LDX da_ptr			; work with current header (4)
@@ -570,12 +563,12 @@ dr_eol:
 			STAB dq_ptr			; complete pointer (4)
 #endif
 ; flags must be enabled for this task!
-			TAB					; get queue index again (2)
 #ifdef	MC6801
 ; again, MCUs do much better
 			LDX #drv_p_en		; whole pointer... (3)
 			ABX					; ...gets increased (3)
 #else
+			TAB					; get queue index again (2)
 			ADDB #<drv_p_en		; add to base of queue (2)
 			STAB dte_ptr+1		; LSB is ready (4)
 			LDAB #>drv_p_en		; go for MSB (2)
@@ -602,7 +595,7 @@ dr_eol:
 			STAB MX_QUEUE*4+1,X
 ; P-queue is done, let us go to simpler R-queue
 dr_notpq:
-		ASL dr_aut			; extract MSB (now is A_REQ) (6)
+		ASL dr_feat			; extract MSB (now is A_REQ) (6)
 		BCC dr_notrq		; skip installation if task not enabled (4)
 ; worth advancing just the header pointer
 			LDX da_ptr			; work with current header (4)
@@ -624,12 +617,12 @@ dr_notpq:
 			STAB dq_ptr			; complete pointer (4)
 #endif
 ; flags must be enabled for this task!
-			TAB					; get queue index again (2)
 #ifdef	MC6801
 ; again, MCUs do much better
 			LDX #drv_p_en		; whole pointer... (3)
 			ABX					; ...gets increased... (3)
 #else
+			TAB					; get queue index again (2)
 			ADDB #<drv_r_en		; add to base of queue (2)
 			STAB dte_ptr+1		; LSB is ready (4)
 			LDAB #>drv_r_en		; go for MSB (2)
