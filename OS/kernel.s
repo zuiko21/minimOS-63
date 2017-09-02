@@ -2,7 +2,7 @@
 ; v0.6a11
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170902-1914
+; last modified 20170902-1920
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -523,7 +523,7 @@ dr_succ:
 ; *** 4) driver should be OK to install, just check whether this ID was not in use ***
 ; ------ IDs table filling for low-RAM systems ------
 ; check whether the ID is already in use
-		LDX #drvrs_id		; beginning of ID list (3)
+		LDX #id_list		; beginning of ID list (3)
 		LDAA dr_id			; fetch aspiring ID (3)
 		LDAB drv_num		; number of drivers registered this far (3)
 		BEQ dr_eol			; already at end of list (4)
@@ -645,7 +645,7 @@ dr_notrq:
 		BRA dr_next			; if arrived here, did not fail initialisation (4)
 dr_abort:
 ; *** if arrived here, driver initialisation failed in some way! ***
-			LDX #drvrs_id		; beginning of ID list (3)
+			LDX #id_list		; beginning of ID list (3)
 			LDAB drv_num		; number of drivers registered this far (3)
 dr_ablst:
 				INX					; advance pointer (4)

@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
 ; v0.6a13
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170831-1808
+; last modified 20170902-1920
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -83,7 +83,7 @@ co_port:
 		STX bl_siz			; transfer complete
 		_EXIT_OK			; "/dev/null" is always OK (7)
 cio_phys:
-	LDX #drvrs_id		; pointer to ID list (3)
+	LDX #id_list		; pointer to ID list (3)
 	LDAA drv_num		; number of drivers (3)
 		BEQ cio_nfound		; no drivers at all! (4)
 cio_loop:

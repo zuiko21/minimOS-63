@@ -1,6 +1,6 @@
-; minimOS·63 0.6a4 System Variables
+; minimOS·63 0.6a5 System Variables
 ; (c) 2012-2017 Carlos J. Santisteban
-; last modified 20170822-1951
+; last modified 20170902-1915
 ; shorter names 20170808
 
 ; **** I/O management ****
@@ -10,7 +10,7 @@ drv_opt		RMB 256				; full page of output driver pointers, new direct scheme 160
 drv_ipt		RMB 256				; full page of input driver pointers, new direct scheme 160406
 #else
 drv_num		FCB 0				; number of installed drivers
-drvrs_id	RMB MX_DRVRS			; space for reasonable number of drivers
+id_list		RMB MX_DRVRS			; space for reasonable number of drivers
 #endif
 
 ; ** I/O flags and locks **
