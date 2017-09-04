@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel
-; v0.6a11
+; v0.6a12
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170902-1920
+; last modified 20170904-2132
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -39,7 +39,7 @@ kern_head:
 	FCC		"kernel"		; filename
 	FCB		0
 kern_splash:
-	FCC		"minimOS·63 0.6a11"	; version in comment
+	FCC		"minimOS·63 0.6a12"	; version in comment
 	FCB		0
 
 	FILL	$FF, kern_head+$F8-*		; padding
@@ -73,12 +73,13 @@ warm:
 
 ; install ISR code (as defined in "isr/irq.s" below)
 	LDX #k_isr			; get address (3)
-	STX ex_pt			; no need to know about actual vector location (5)
+	STX kerntab			; no need to know about actual vector location (5)
 	_ADMIN(SET_ISR)		; install routine
 
 ; install SWI code (as defined in "isr/swi.s" below)
 	LDX #k_swi			; get address (3)
-	STX ex_pt			; no need to know about actual vector location (5)
+	STX kerntab		; no need to know about actual vector location 
+(5)
 	_ADMIN(SET_DBG)		; install routine
 
 ; Kernel no longer supplies default NMI, but could install it otherwise
@@ -193,7 +194,7 @@ dr_inst:
 dr_phys:
 #endif
 		LDAA D_AUTH,X		; get provided features (5)
-		STAA dr_feat		; keep for later use (4)
+		STAA dr_aut		; keep for later use (4)
 
 ; *** 3) before registering, check whether the driver COULD be successfully installed ***
 ; that means 1) there must be room enough on the interrupt queues for its tasks, if provided
@@ -301,12 +302,12 @@ dr_empty:
 ; can use dr_feat directly as will no longer be used
 ; preliminary 6800 does NOT use a loop
 ; let us go for P-queue first
-		ASL dr_feat			; extract MSB (will be A_POLL first, then A_REQ)
+		ASL dr_aut			; extract MSB (will be A_POLL first, then A_REQ)
 		BCC dr_notpq		; skip installation if task not enabled (4)
 ; time to get a pointer to the-block-of-pointers (source)
 			LDX da_ptr			; work with current header (4)
 			LDX D_POLL,X		; get this pointer (6)
-			STX systmp			; store it ***** check! (5)
+			STX pfa_ptr			; store it (5)
 ; prepare another entry into queue
 			LDAB queue_mx+1		; get index of free P-entry! (4)
 			TBA				; save for later (2)
@@ -355,12 +356,12 @@ dr_empty:
 			STAB MX_QUEUE*4+1,X
 ; P-queue is done, let us go to simpler R-queue
 dr_notpq:
-		ASL dr_feat			; extract MSB (now is A_REQ) (6)
+		ASL dr_aut			; extract MSB (now is A_REQ) (6)
 		BCC dr_notrq		; skip installation if task not enabled (4)
 ; worth advancing just the header pointer
 			LDX da_ptr			; work with current header (4)
 			LDX D_ASYN,X		; get this pointer (6)
-			STX systmp			; store it ***** check! (5)
+			STX pfa_ptr			; store it (5)
 ; prepare another entry into queue
 			LDAA queue_mx		; get index of free A-entry! (4)
 			TAB					; two copies (2)
@@ -422,7 +423,7 @@ dr_next:
 dr_itask:
 ; *** preliminary 6800 version, room to optimise ***
 ; read address from header and update it!
-	LDX systmp			; get set pointer***** (4)
+	LDX pfa_ptr			; get set pointer (4)
 #ifdef	MC6801
 	LDD 0,X				; MCUs get the whole word! (5)
 	LDX dq_ptr			; switch pointer (4)
@@ -439,7 +440,7 @@ dr_itask:
 	RTS
 
 ; * routine for advancing to next queue *
-; both pointers in dq_ptr (whole queue size) and sysptr (next word in header)
+; both pointers in dq_ptr (whole queue size) and pfa_ptr (next word in header)
 ; likely to get inlined as used only once just after dr_itask
 dr_nextq:
 ; update the original pointer
@@ -456,10 +457,10 @@ dr_nextq:
 	STAA dq_ptr			; ready! (4)
 #endif
 ; and now the header reading pointer
-	LDX systmp			; get set pointer***** (4)
+	LDX pfa_ptr			; get set pointer***** (4)
 	INX					; go for next entry (4+4)
 	INX
-	STX systmp			; this has to be updated (5+5)
+	STX pfa_ptr			; this has to be updated (5+5)
 	RTS
 ; ++++++ ++++++ end of standard version ++++++ ++++++
 
@@ -496,7 +497,7 @@ dr_inst:
 dr_phys:
 #endif
 		LDAA D_AUTH,X		; get provided features (5)
-		STAA dr_feat		; another commonly used value (will stay during check) (4)
+		STAA dr_aut		; another commonly used value (will stay during check) (4)
 ; *** 3) before registering, check whether the driver COULD be successfully installed ***
 ; that means 1) there must be room enough on the interrupt queues for its tasks, if provided
 ; and 2) the D_INIT routine succeeded as usual
@@ -538,15 +539,16 @@ dr_scan:
 dr_eol:
 ; supposedly no conflicting IDs found, or at least pointer set after last one
 		STAA 0,X			; store in list, now in RAM (6)
+
 ; *** 5) register interrupt routines *** new, much cleaner approach ***** REVISE
 ; preliminary 6800 does NOT use a loop
 ; let us go for P-queue first
-		ASL dr_feat			; extract MSB (will be A_POLL first, then A_REQ)
+		ASL dr_aut			; extract MSB (will be A_POLL first, then A_REQ)
 		BCC dr_notpq		; skip installation if task not enabled (4)
 ; time to get a pointer to the-block-of-pointers (source)
 			LDX da_ptr			; work with current header (4)
 			LDX D_POLL,X		; get this pointer (6)
-			STX systmp			; store it ***** check! (5)
+			STX pfa_ptr			; store it (5)
 ; prepare another entry into queue
 			LDAA queue_mx+1		; get index of free P-entry! (4)
 			TAB					; two copies (2)
@@ -595,12 +597,12 @@ dr_eol:
 			STAB MX_QUEUE*4+1,X
 ; P-queue is done, let us go to simpler R-queue
 dr_notpq:
-		ASL dr_feat			; extract MSB (now is A_REQ) (6)
+		ASL dr_aut			; extract MSB (now is A_REQ) (6)
 		BCC dr_notrq		; skip installation if task not enabled (4)
 ; worth advancing just the header pointer
 			LDX da_ptr			; work with current header (4)
 			LDX D_ASYN,X		; get this pointer (6)
-			STX systmp			; store it ***** check! (5)
+			STX pfa_ptr			; store it (5)
 ; prepare another entry into queue
 			LDAA queue_mx		; get index of free A-entry! (4)
 			TAB					; two copies (2)
@@ -668,11 +670,11 @@ dr_next:
 ; *****************************************
 
 ; * routine for copying a pointer from header into a table, plus advance to next queue *
-; sysptr & dq_ptr (will NOT get updated) set as usual
+; pfa_ptr & dq_ptr (will NOT get updated) set as usual
 dr_itask:
 ; *** preliminary 6800 version, room to optimise ***
 ; read address from header and update it!
-	LDX systmp			; get set pointer (4)
+	LDX pfa_ptr			; get set pointer (4)
 #ifdef	MC6801
 	LDD 0,X				; MCUs get the whole word! (5)
 	LDX dq_ptr			; switch pointer (4)
@@ -706,10 +708,10 @@ dr_nextq:
 	STAA dq_ptr			; ready! (4)
 #endif
 ; and now the header reading pointer
-	LDX systmp			; get set pointer (4)
+	LDX pfa_ptr			; get set pointer (4)
 	INX					; go for next entry (4+4)
 	INX
-	STX systmp			; this has to be updated (5+5)
+	STX pfa_ptr			; this has to be updated (5+5)
 	RTS
 
 ; in case no I/O lock arrays were initialised... only for LOWRAM
@@ -799,7 +801,7 @@ k_swi:
 ; in headerless builds, keep at least the splash string
 #ifdef	NOHEAD
 kern_splash:
-	FCC		"minimOS·63 0.6a11"
+	FCC		"minimOS·63 0.6a12"
 	FCB		0
 #endif
 

@@ -1,6 +1,6 @@
 ; minimOS·63 zeropage
 ; v0.6a9
-; last modified 20170903-1959
+; last modified 20170904-2137
 ; MASM compliant 20170614
 
 	ORG		0
@@ -88,7 +88,6 @@ local2:
 locpt2		RMB 4	; variables for kernel functions @ $E8
 
 dr_id		EQU da_ptr+2
-dr_feat		EQU da_ptr+3
 rl_dev		EQU dr_id
 
 ; *** include aliases here for local3/locpt3 ***
