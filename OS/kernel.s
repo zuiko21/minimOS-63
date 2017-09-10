@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel
-; v0.6a12
+; v0.6a13
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170904-2132
+; last modified 20170910-1812
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -39,7 +39,7 @@ kern_head:
 	FCC		"kernel"		; filename
 	FCB		0
 kern_splash:
-	FCC		"minimOS·63 0.6a12"	; version in comment
+	FCC		"minimOS·63 0.6a13"	; version in comment
 	FCB		0
 
 	FILL	$FF, kern_head+$F8-*		; padding
@@ -78,8 +78,7 @@ warm:
 
 ; install SWI code (as defined in "isr/swi.s" below)
 	LDX #k_swi			; get address (3)
-	STX kerntab		; no need to know about actual vector location 
-(5)
+	STX kerntab		; no need to know about actual vector location (5)
 	_ADMIN(SET_DBG)		; install routine
 
 ; Kernel no longer supplies default NMI, but could install it otherwise
@@ -158,7 +157,7 @@ dr_lclear:
 ; *** 2) prepare access to each driver header ***
 ; first get the pointer to it
 
-drv_aix	EQU		systmp	; temporary pointer, *** MUST go into locals ***
+drv_aix	EQU		systmp	; temporary pointer, *** not needed into locals ***
 
 	LDX #drvrs_ad		; driver table in ROM (3)
 dr_loop:
@@ -184,13 +183,16 @@ dr_clrio:
 
 dr_inst:
 		STX da_ptr			; store pointer to header (5) *** but check new variable conflicts! ***
+; *** here begins the standard function ***
+	LDX da_ptr			; function gets standard parameter
 ; is it worth storing ID?
 		LDAA D_ID,X			; get ID code (5)
 ; unlike the 65xx version, keeping an ID copy is needed
 		STAA dr_id			; keep in local variable as will be often used (4)
 #ifdef	SAFE
 		BMI dr_phys			; only physical devices (4)
-			JMP dr_abort		; reject logical devices (3)
+; otherwise function returns INVALID code
+			JMP dr_iabort		; reject logical devices (3)
 dr_phys:
 #endif
 		LDAA D_AUTH,X		; get provided features (5)
@@ -215,19 +217,25 @@ dr_nrtsk:
 ; if arrived here, there is room for interrupt tasks, but check init code
 		JSR D_INIT,X		; like dr_icall, call D_INIT routine! (8...)
 		BCC dr_succ			; successfull, proceed (4)
+; init code failed otherwise, function returns UNAVAIL error code
+			JMP dr_uabort
 dr_nabort:
-			JMP dr_abort		; or did not checked OK (3)
+; no space on queue, function returns FULL error
+			JMP dr_fabort		; (3)
 dr_succ:
 
 ; *** 4) driver should be OK to install, just check whether this ID was not in use ***
 ; ++++++ new faster driver list ++++++
 		BSR dr_outptr		; get pointer to output routine (8+28)
 		CPX #dr_error		; check whether something was installed (3)
-			BNE dr_nabort		; pointer was not empty (4)
+			BNE dr_inuse		; pointer was not empty (4)
 		BSR dr_inptr		; get pointer to input routine (8+34)
 		CPX #dr_error		; check whether something was installed (3)
-			BNE dr_nabort		; already in use (4)
+			BNE dr_inuse		; already in use (4)
 		BRA dr_empty		; was empty, OK (4)
+dr_inuse:
+; already in use, function returns BUSY error or something...
+			JMP dr_babort		; ID already in use
 
 ; ********************************************
 ; *** subroutine for copy dr_iopt into (X) ***
@@ -257,7 +265,7 @@ dr_inptr:
 	RTS					; no shared code here (5)
 #else
 	ADDB #<drv_ipt		; add to LSB (2)
-	STAB systmp+1		; *** is this already used??? *** (4)
+	STAB pfa_ptr+1		; *** is this already used??? *** (4)
 	LDAB #>drv_ipt		; now for MSB (2)
 	BRA dr_iopx			; common ending! (4+17)
 #endif
@@ -273,13 +281,58 @@ dr_outptr:
 #else
 ; compute using local, then load into X
 	ADDB #<drv_opt		; add to LSB (2)
-	STAB systmp+1		; *** is this already used??? *** (4)
+	STAB pfa_ptr+1		; *** is this already used??? *** (4)
 	LDAB #>drv_opt		; now for MSB (2)
 dr_iopx:
 	ADCB #0				; propagate carry (2+4)
-	STAB systmp
-	LDX systmp			; get final pointer (4+5)
+	STAB pfa_ptr
+	LDX pfa_ptr			; get final pointer (4+5)
 #endif
+	RTS
+
+; *** routine for copying a pointer from header into a table, plus advance to next queue ***
+; sysptr & dq_ptr (will NOT get updated) set as usual
+dr_itask:
+; * preliminary 6800 version, room to optimise *
+; read address from header and update it!
+	LDX pfa_ptr			; get set pointer (4)
+#ifdef	MC6801
+	LDD 0,X				; MCUs get the whole word! (5)
+	LDX dq_ptr			; switch pointer (4)
+	STD 0,X				; MCUs store whole word! (5)
+#else
+	LDAA 0,X			; indirect read MSB (5)
+	LDAB 1,X			; and LSB (5)
+	LDX dq_ptr			; switch pointer (4)
+	STAA 0,X			; store fetched task pointer (6)
+	STAB 1,X			; LSB too (6+5)
+#endif
+; in any case, exits with X pointing as dq_ptr *** needed after freq setting
+; write pointer into queue
+	RTS
+
+; *** routine for advancing to next queue ***
+; both pointers in dq_ptr (whole queue size) and pfa_ptr (next word in header)
+; likely to get inlined as used only once just after dr_itask
+dr_nextq:
+; update the original pointer
+	LDAB #MX_QUEUE		; amount to add... (2)
+#ifdef	MC6801
+; MCUs do it much better!
+	ABX					; ...to X which had dq_ptr as per previous dr_itask... (3)
+	STX dq_ptr			; ...gets updated! (4)
+#else
+	ADDB dq_ptr+1		; ...to previous LSB (3)
+	LDAA dq_ptr			; MSB too (3)
+	ADCA #0				; propagate carry (2)
+	STAB dq_ptr+1		; update values (4)
+	STAA dq_ptr			; ready! (4)
+#endif
+; and now the header reading pointer
+	LDX pfa_ptr			; get set pointer***** (4)
+	INX					; go for next entry (4+4)
+	INX
+	STX pfa_ptr			; this has to be updated (5+5)
 	RTS
 ; *** end of subroutines ***
 ; **************************
@@ -299,7 +352,6 @@ dr_empty:
 		BSR dr_setpt		; using B, copy dr_iopt into (X) (8+29)
 
 ; *** 5) register interrupt routines *** new, much cleaner approach ***** REVISE
-; can use dr_feat directly as will no longer be used
 ; preliminary 6800 does NOT use a loop
 ; let us go for P-queue first
 		ASL dr_aut			; extract MSB (will be A_POLL first, then A_REQ)
@@ -401,11 +453,27 @@ dr_notpq:
 			BSR dr_itask		; install entry into queue (8+35, 8+23 MCU)
 dr_notrq:
 ; *** 6) continue initing drivers ***
-		BRA dr_next			; if arrived here, did not fail initialisation (4)
-
-; if arrived here, did not fail initialisation, no difference on standard version
+;		BRA dr_ended			; if arrived here, did not fail initialisation (4)
+; ...no errors happened
+;	_EXIT_OK
+; *** error handling ***
+dr_iabort:
+		LDAB #INVALID			; logical IDs not allowed
+		BRA dr_abort
+dr_fabort:
+		LDAB #FULL			; no room in queue
+		BRA dr_abort
+dr_babort:
+		LDAB #BUSY			; ID already used******
+		BRA dr_abort
+dr_uabort:
+		LDAB #UNAVAIL			; INIT failed, not available
 dr_abort:
-; *** if arrived here, driver initialisation failed in some way! ***
+; standard error handling, no macro allowed
+		SEC
+		RTS
+dr_ended:
+; *** *** end of standard function*** ***
 dr_next:
 ; in order to keep drivers_ad in ROM, can't just forget unsuccessfully registered drivers...
 ; in case drivers_ad is *created* in RAM, dr_abort could just be here, is this OK with new separate pointer tables?
@@ -414,54 +482,6 @@ dr_next:
 		INX					; eeeeeeeek! pointer arithmetic! (4)
 		JMP dr_loop			; go for next (3)
 
-; *****************************************
-; *** some driver installation routines ***
-; *****************************************
-
-; * routine for copying a pointer from header into a table, plus advance to next queue *
-; sysptr & dq_ptr (will NOT get updated) set as usual
-dr_itask:
-; *** preliminary 6800 version, room to optimise ***
-; read address from header and update it!
-	LDX pfa_ptr			; get set pointer (4)
-#ifdef	MC6801
-	LDD 0,X				; MCUs get the whole word! (5)
-	LDX dq_ptr			; switch pointer (4)
-	STD 0,X				; MCUs store whole word! (5)
-#else
-	LDAA 0,X			; indirect read MSB (5)
-	LDAB 1,X			; and LSB (5)
-	LDX dq_ptr			; switch pointer (4)
-	STAA 0,X			; store fetched task pointer (6)
-	STAB 1,X			; LSB too (6+5)
-#endif
-; in any case, exits with X pointing as dq_ptr *** needed after freq setting
-; write pointer into queue
-	RTS
-
-; * routine for advancing to next queue *
-; both pointers in dq_ptr (whole queue size) and pfa_ptr (next word in header)
-; likely to get inlined as used only once just after dr_itask
-dr_nextq:
-; update the original pointer
-	LDAB #MX_QUEUE		; amount to add... (2)
-#ifdef	MC6801
-; MCUs do it much better!
-	ABX					; ...to X which had dq_ptr as per previous dr_itask... (3)
-	STX dq_ptr			; ...gets updated! (4)
-#else
-	ADDB dq_ptr+1		; ...to previous LSB (3)
-	LDAA dq_ptr			; MSB too (3)
-	ADCA #0				; propagate carry (2)
-	STAB dq_ptr+1		; update values (4)
-	STAA dq_ptr			; ready! (4)
-#endif
-; and now the header reading pointer
-	LDX pfa_ptr			; get set pointer***** (4)
-	INX					; go for next entry (4+4)
-	INX
-	STX pfa_ptr			; this has to be updated (5+5)
-	RTS
 ; ++++++ ++++++ end of standard version ++++++ ++++++
 
 #else
@@ -488,12 +508,15 @@ dr_loop:
 			JMP dr_ok			; all done otherwise (3)
 dr_inst:
 		STX da_ptr			; store pointer to header (5) *** but check new variable conflicts! ***
+; *** external API function here ***
+;	LDX da_ptr			; pointer as parameter
 ; create entry on IDs table
 		LDAA D_ID,X			; get ID code (5)
 		STAA dr_id			; keep in local variable as will be often used (4)
 #ifdef	SAFE
 		BMI dr_phys			; only physical devices (4)
-			JMP dr_abort		; reject logical devices (3)
+; function returns INVALID
+			JMP dr_iabort		; reject logical devices (3)
 dr_phys:
 #endif
 		LDAA D_AUTH,X		; get provided features (5)
@@ -517,8 +540,11 @@ dr_nrtsk:
 ; if arrived here, there is room for interrupt tasks, but check init code
 		JSR D_INIT,X		; like dr_icall, call D_INIT routine! (8...)
 		BCC dr_succ			; successfull, proceed (4)
+; function returns UNAVAIL error
+			JMP dr_uabort		; did not check OK (3)
 dr_nabort:
-			JMP dr_abort		; or did not checked OK (3)
+; function returns FULL error
+			JMP dr_fabort		; no room (3)
 dr_succ:
 
 ; *** 4) driver should be OK to install, just check whether this ID was not in use ***
@@ -531,7 +557,9 @@ dr_succ:
 dr_scan:
 #ifdef	SAFE
 			CMPA 0,X			; compare with list entry (5)
-				BEQ dr_abort		; already in use, don't register (4)
+			BNE dr_nused			; free to use
+				JMP dr_babort		; already in use, don't register (4)
+dr_nused:
 #endif
 			INX					; otherwise try next one (4)
 			DECB				; one less to go (2+4)
@@ -644,17 +672,34 @@ dr_notrq:
 
 
 ; *** 6) continue initing drivers ***
-		BRA dr_next			; if arrived here, did not fail initialisation (4)
+;		BRA dr_ended			; if arrived here, did not fail initialisation (4)
+	_EXIT_OK
+dr_iabort:
+		LDAB #INVALID
+		BRA dr_abort
+dr_fabort:
+		LDAB #FULL
+		BRA dr_abort
+dr_babort:
+		LDAB #BUSY			;**********
+		BRA dr_abort
+dr_uabort:
+		LDAB #UNAVAIL
 dr_abort:
 ; *** if arrived here, driver initialisation failed in some way! ***
 			LDX #id_list		; beginning of ID list (3)
-			LDAB drv_num		; number of drivers registered this far (3)
+			LDAA drv_num		; number of drivers registered this far (3)
 dr_ablst:
 				INX					; advance pointer (4)
-				DECB				; one less (2)
+				DECA				; one less (2)
 				BNE dr_ablst		; acc B will never start at 0! (4)
-			LDAB #DEV_NULL		; invalid proper value... (2)
+			LDAA #DEV_NULL		; invalid proper value... (2)
 			STAB 0,X			; ...as unreachable entry (6)
+; standard error, no macro
+		SEC
+		RTS
+; *** *** end of function *** ***
+
 dr_next:
 ; ------ low-RAM systems keep count of installed drivers ------
 		INC drv_num			; update SINGLE index (6)
@@ -801,7 +846,7 @@ k_swi:
 ; in headerless builds, keep at least the splash string
 #ifdef	NOHEAD
 kern_splash:
-	FCC		"minimOS·63 0.6a12"
+	FCC		"minimOS·63 0.6a13"
 	FCB		0
 #endif
 
