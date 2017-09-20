@@ -2,7 +2,7 @@
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
 ; v0.6a1
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170920-0859
+; last modified 20170920-1005
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -53,91 +53,23 @@ cout:
 ; C 		= I/O error
 ;		USES da_ptr, dr_id, plus whatever the driver takes
 
-cio_of		EQU dr_id	; parameter switching between BLIN and BOUT, must leave da_ptr clear!
+;cio_of		EQU dr_id	; parameter switching between BLIN and BOUT, must leave da_ptr clear!
 
 blout:
-
-#ifdef	MC6801
-	LDAA #D_BOUT		; offset to be added (2)
-	STAA cio_of			; store safely (4)
-#else
-	CLR cio_of			; zero indicates OUT, special faster value (6)
-#endif
 	TSTB				; for indexed comparisons (2)
 	BNE co_port			; not default (4)
 		LDAB stdout			; default output device (3)
 		BNE co_port			; eeeeeeeeeek (4)
-			LDAB #DEVICE		; *** somewhat ugly hack *** (2)
+			LDAB defltout		; otherwise get global device (4)
 co_port:
 	BMI cio_phys		; not a logic device (4)
-; no need to check for windows or filesystem
-; investigate rest of logical devices
-		CMPB #DEV_NULL		; lastly, ignore output (2)
-			BNE cio_nfound		; final error otherwise (4)
-; DEV_NULL must reset transfer size!
-		LDX #0
-		STX bl_siz			; transfer complete
-		_EXIT_OK			; "/dev/null" is always OK (7)
-cio_phys:
-	LDX #id_list		; pointer to ID list (3)
-	LDAA drv_num		; number of drivers (3)
-		BEQ cio_nfound		; no drivers at all! (4)
-cio_loop:
-		CMPB 0,X			; get ID from list (5)
-			BEQ cio_dev			; device found! (4)
-		INX					; go for next (4)
-		DECA				; one less to go (2)
-		BNE cio_loop		; repeat until end, will reach not_found otherwise (4)
-cio_nfound:
-	_ERR(N_FOUND)		; unknown device (9)
-cio_dev:
-	NEGA				; driver countdown will be subtracted! (2)
-	ADDA drv_num		; compute driver position in list (3)
-	ASLA				; two times is offset LSB for drivers_ad list (2)
-#ifdef	MC6801
-	TAB					; get offset here (2)
-	LDX #drvrs_ad		; base address (3)
-	ABX					; done! (3)
-#else
-	ADDA #<drvrs_ad		; take table LSB (2)
-	LDAB #>drvrs_ad		; same for MSB (2)
-	ADCB #0				; propagate carry (2)
-	STAB da_ptr			; store pointer to list entry (4+4)
-	STAA da_ptr+1
-	LDX da_ptr			; use as base index (4)
-#endif
-	LDX 0,X				; now X holds the header address (6)
-; here must jump to appropriate driver routine
-#ifdef	MC6801
-;  MCU version
-	LDAB cio_of			; get offset, must hold an appropriate D_x offset (3)
-	ABX					; GREAT, pointer to routine is ready (3)
-	LDX 0,X				; ready to jump there (6)
-#else
-; generic way follows
-	TST cio_of			; input or output? (6)
-	BEQ cio_out			; was output eeeeeek (4)
-		LDX D_BLIN,X			; otherwise get input routine pointer (6)
-		JMP 0,X				; not worth reusing code (4...)
-cio_out:
-	LDX D_BOUT,X		; faster getting output routine pointer (6)
-#endif
-	JMP 0,X				; will return to caller (4...)
-; ***************************** 6502 6502 *******************************
-bl_out:
-	TYA					; for indexed comparisons (2)
-	BNE co_port			; not default (3/2)
-		LDA stdout			; new per-process standard device
-		BNE co_port			; already a valid device
-			LDA defltout		; otherwise get system global (4)
-co_port:
-	BMI co_phys			; not a logic device (3/2)
-		CMP #64				; first file-dev??? ***
-			BCC co_win			; below that, should be window manager
+; will need to check for windows or filesystem... 
+		CMPB #64				; first file-dev??? ***
+			BLT co_win			; below that, should be window manager
 ; ** optional filesystem access **
 #ifdef	FILESYSTEM
-		CMP #64+MX_FILES	; still within file-devs?
-			BCS co_log			; that value or over, not a file
+		CMPB #64+MX_FILES	; still within file-devs?
+			BGE co_log			; that value or over, not a file
 ; *** manage here output to open file ***
 #endif
 ; ** end of filesystem access **
@@ -146,41 +78,59 @@ co_win:
 		_ERR(NO_RSRC)		; not yet implemented ***placeholder***
 co_log:
 ; investigate rest of logical devices
-		CMP #DEV_NULL		; lastly, ignore output
-		BNE cio_nfound		; final error otherwise
-			_STZA bl_siz			; transfer fullfilled eeeeeek
-			_STZA bl_siz+1
-			_EXIT_OK			; "/dev/null" is always OK
-; *** common I/O call ***
+		CMPB #DEV_NULL		; lastly, ignore output (2)
+		BNE cio_nfound		; final error otherwise (4)
+; DEV_NULL must reset transfer size!
+			LDX #0
+			STX bl_siz			; transfer complete
+			_EXIT_OK			; "/dev/null" is always OK (7)
 cio_nfound:
-	_ERR(N_FOUND)		; unknown device
-
-; * stuff begins here *
-co_phys:
-; arrived here with dev # in A
-; new per-phys-device MUTEX for COUT, no matter if singletask!
-	ASL					; convert to index (2+2)
-	STA iol_dev			; keep device-index temporarily, worth doing here (3)
-	_CRITIC				; needed for a MUTEX (5)
+		_ERR(N_FOUND)		; unknown device (9)
+cio_phys:
+	ASLB				; convert (negative) ID into table offset (2)
+	STAB iol_dev		; eeeeeeeeeeeeeeeeeeeeeeeeeek
+#ifdef	MC6801
+	LDX #cio_lock		; get locks table base pointer (3)
+	ABX					; compute entry address! ()
+	STX local1			; eeeeeeeeeek
+#else
+	ADDB #<cio_lock		; add offset to base LSB... ()
+	STAB local1+1		; ...save temporarily... (check conflicts!!!)
+	LDAB #0
+	ADCB #>cio_lock		; ...and propagate carry to MSB ()
+	STAB local1			; pointer is complete (see above)
+#endif
+	_CRITIC
+	PSHA				; *** just in case B_YIELD touches it ***
 co_loop:
-		LDX iol_dev			; retrieve index!
-		LDA cio_lock, X		; check whether THAT device is in use (4)
-			BEQ co_lckd			; resume operation if free (3)
-; otherwise yield CPU time and repeat
-		_KERNEL(B_YIELD)	; otherwise yield CPU time and repeat *** could be patched!
-		_BRA co_loop		; try again! (3)
-co_lckd:
-	LDA run_pid			; get ours in A, faster!
-	STA cio_lock, X		; *reserve this (4)
+		LDX local1			; pointer was ready to use
+		LDAB 0,X			; get pointed entry in locks list
+			BEQ co_lckd			; exit loop if free
+		_KERNEL(B_YIELD)	; otherwise yield CPU time and repeat
+		BRA co_loop
+cp_lckd:
+	LDAB run_pid		; current task...
+	STAB 0,X			; ...is now the owner of this resource
+	PULA				; *** retrieve saved flags ***
 	_NO_CRIT
-; continue with mutually exclusive COUT
-	JSR co_call			; direct CALL!!! driver should end in RTS as usual via the new DR_ macros
-
-; *** common I/O call ***
+; now compute direct driver address
+	LDAB iol_dev		; retrieve this index!
+#ifdef	MC6801
+	LDX #drv_opt		; get output routines table base pointer (3)
+	ABX					; compute entry address! ()
+#else
+	ADDB #<drv_opt		; add offset to base LSB... ()
+	STAB local2+1		; ...save temporarily... (check conflicts!!!)
+	LDAB #0
+	ADCB #>drv_opt		; ...and propagate carry to MSB ()
+	STAB local2			; pointer is complete... (see above)
+	LDX local2			; ...and ready to use
+#endif
+	JSR 0,X				; call driver and return
 cio_unlock:
-	LDX iol_dev			; **need to clear new lock! (3)
-	_STZA cio_lock, X	; ...because I have to clear MUTEX! *new indexed form (4)
-	RTS					; exit with whatever error code
+	LDX local1			; lock pointer was ready to use
+	CLR 0,X				; make entry unlocked
+	RTS					; return whatever error
 
 ; ****************************
 ; *** CIN, get a character *** and manage events!
@@ -196,8 +146,13 @@ cin:
 	STX bl_ptr
 	LDX #1				; single byte
 	STX bl_siz
-	JSR blin			; non-patchable call
-		BCS ci_exit			; error code must be kept
+	_KERNEL(BLIN)		; patchable call!
+	BCC ci_nerror
+		RTS					; error code must be kept
+ci_nerror:
+
+
+
 ; now process possible event?
 ; ** EVENT management **
 	LDAA io_c			; get received character (3)
@@ -231,22 +186,15 @@ ci_notdle:
 		JSR signal			; send signal (9)
 ci_abort:
 		_ERR(EMPTY)			; no character was received (9)
-; ********************************** 6502 6502 6502 ***********************************
-	LDA #io_c			; will point to old parameter
-	STA bl_pt			; set pointer
-	_STZA bl_pt+1
-	LDA #1				; transfer a single byte
-	STA bl_siz			; set size
-	_STZA bl_siz+1
-	_KERNEL(BLIN)			; get small block...
-; ...and check for events!
-	BCC ci_nerror			; got something...
-		RTS				; ...or keep error code from BLIN
+; **************************** 6800 code from original 6502 ***********************************
+; .....
 ci_nerror:
-	LDX iol_dev			; **use physdev as index! worth doing here (3)
-	LDA io_c			; get received character
-	CMP #' '			; printable?
-		BCS ci_exitOK		; if so, will not be an event, exit with NO error
+; must compute entry on cin_mode table!
+
+	LDX 			; **use physdev as index! worth doing here (3)
+	LDAA io_c			; get received character
+	CMPA #' '			; printable?
+		BCC ci_exitOK		; if so, will not be an event, exit with NO error
 ; otherwise might be an event
 ; check for binary mode first
 	LDY cin_mode, X		; *get flag, new sysvar 20150617
@@ -254,28 +202,29 @@ ci_nerror:
 		_STZA cin_mode, X	; *back to normal mode
 ci_exitOK:
 		_EXIT_OK		; *otherwise mark no error and exit
+; already 6800!
 ci_event:
-	CMP #16				; is it DLE?
+	CMPA #16			; is it DLE?
 	BNE ci_notdle		; otherwise check next
-		STA cin_mode, X		; *set binary mode! puts 16, safer and faster!
+		STAA cin_mode, X	; *set binary mode! puts 16, safer and faster!
 		_ERR(EMPTY)			; and supress received character (will NOT stay locked!)******************
 ci_notdle:
-	CMP #3				; is it ^C? (TERM)
+	CMPA #3				; is it ^C? (TERM)
 	BNE ci_noterm		; otherwise check next
-		LDA #SIGTERM
+		LDAA #SIGTERM
 		BRA ci_signal		; send signal
 ci_noterm:
-	CMP #4				; is it ^D? (KILL) somewhat dangerous...
+	CMPA #4				; is it ^D? (KILL) somewhat dangerous...
 	BNE ci_nokill		; otherwise check next
-		LDA #SIGKILL
+		LDAA #SIGKILL
 		BRA ci_signal		; send signal
 ci_nokill:
-	CMP #26				; is it ^Z? (STOP)
+	CMPA #26			; is it ^Z? (STOP)
 		BNE ci_exitOK		; otherwise there is no more to check
-	LDA #SIGSTOP		; last signal to be sent
+	LDAA #SIGSTOP		; last signal to be sent
 ci_signal:
-	STA b_sig			; set signal as parameter
-	LDY run_pid			; faster GET_PID
+	STAA b_sig			; set signal as parameter
+	LDAB run_pid		; faster GET_PID
 	_KERNEL(B_SIGNAL)	; send signal to myself
 ; continue after having filtered the error
 ci_error:
