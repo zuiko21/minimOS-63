@@ -2,7 +2,7 @@
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
 ; v0.6a1
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170920-1223
+; last modified 20170920-1232
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -146,15 +146,17 @@ cin:
 	STX bl_ptr
 	LDX #1				; single byte
 	STX bl_siz
-	STAB local1			; MUST keep device, check conflicts!!!
+	PSHB				; MUST keep device, much safer this way
 	_KERNEL(BLIN)		; patchable call!
 	BCC ci_nerror
+		PULA				; must discard saved device while keeping error code...
 		RTS					; error code must be kept
 ci_nerror:
 ; ** EVENT management **
 	LDAA io_c			; get received character (3)
 	CMPA #' '-1			; printable? (2)
 	BLS ci_manage		; if not, might be an event (4)
+		PULA				; again, discard saved device...
 ci_exitOK:
 		CLC					; otherwise, no error --- eeeeeeeek! (2)
 ci_exit:
@@ -163,7 +165,7 @@ ci_exit:
 ci_manage:
 ; check for binary mode first
 ; must compute entry on cin_mode table!
-	LDAB local1			; retrieve device ID
+	PULB				; retrieve device ID
 #ifdef	MC6801
 	LDX #cin_mode		; get mode table base pointer (3)
 	ABX					; compute entry address! ()
