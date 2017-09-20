@@ -2,7 +2,7 @@
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
 ; v0.6a1
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170920-1005
+; last modified 20170920-1223
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -146,14 +146,11 @@ cin:
 	STX bl_ptr
 	LDX #1				; single byte
 	STX bl_siz
+	STAB local1			; MUST keep device, check conflicts!!!
 	_KERNEL(BLIN)		; patchable call!
 	BCC ci_nerror
 		RTS					; error code must be kept
 ci_nerror:
-
-
-
-; now process possible event?
 ; ** EVENT management **
 	LDAA io_c			; get received character (3)
 	CMPA #' '-1			; printable? (2)
@@ -165,44 +162,23 @@ ci_exit:
 ; ** continue event management **
 ci_manage:
 ; check for binary mode first
-	TST cin_mode		; was it in binary mode? (6)
-	BEQ ci_event		; if not, should process possible event (4)
-		CLR cin_mode		; otherwise back to normal mode (6)
-		_EXIT_OK			; and return whatever was received (7)
-; standard mode must check for events
-ci_event:
-	CMPA #16			; is it DLE? (2)
-	BNE ci_notdle		; otherwise check next (4)
-		STAA cin_mode		; set binary mode! SAFER! (4)
-		BRA ci_abort		; and supress received character (4)
-ci_notdle:
-	CMPA #3				; is it ^C/TERM? (2)
-	BNE ci_exitOK		; otherwise there's no more to check -- only signal for single-task systems!
-		LDAB #SIGTERM		; signal to be sent (2)
-		STAB b_sig			; set signal as parameter (4)
-#ifdef	SAFE
-		CLRB				; sent to all, this is the only one (2)
-#endif
-		JSR signal			; send signal (9)
-ci_abort:
-		_ERR(EMPTY)			; no character was received (9)
-; **************************** 6800 code from original 6502 ***********************************
-; .....
-ci_nerror:
 ; must compute entry on cin_mode table!
-
-	LDX 			; **use physdev as index! worth doing here (3)
-	LDAA io_c			; get received character
-	CMPA #' '			; printable?
-		BCC ci_exitOK		; if so, will not be an event, exit with NO error
-; otherwise might be an event
-; check for binary mode first
-	LDY cin_mode, X		; *get flag, new sysvar 20150617
-	BEQ ci_event		; should process possible event
-		_STZA cin_mode, X	; *back to normal mode
-ci_exitOK:
-		_EXIT_OK		; *otherwise mark no error and exit
-; already 6800!
+	LDAB local1			; retrieve device ID
+#ifdef	MC6801
+	LDX #cin_mode		; get mode table base pointer (3)
+	ABX					; compute entry address! ()
+#else
+	ADDB #<cin_mode		; add offset to base LSB... ()
+	STAB local1+1		; ...save temporarily... (check conflicts!!!)
+	LDAB #0
+	ADCB #>cin_mode		; ...and propagate carry to MSB ()
+	STAB local1			; pointer is complete (see above)
+	LDX local1			; ...and ready to use
+#endif
+	LDAB 0,X			; was it in binary mode? ()
+	BEQ ci_event		; if not, should process possible event (4)
+		CLR 0,X				; otherwise back to normal mode (6)
+		_EXIT_OK			; and return whatever was received (7)
 ci_event:
 	CMPA #16			; is it DLE?
 	BNE ci_notdle		; otherwise check next
