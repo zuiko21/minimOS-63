@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel API
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
-; v0.6a1
+; v0.6a2
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170920-1232
+; last modified 20170921-1234
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -19,7 +19,6 @@ set_curr:
 ; *** FUTURE IMPLEMENTATION ***
 aqmanage:
 pqmanage:
-dr_install:
 dr_shutdown:
 
 	_ERR(UNAVAIL)		; go away!
@@ -110,6 +109,7 @@ co_loop:
 		BRA co_loop
 cp_lckd:
 	LDAB run_pid		; current task...
+	LDX local1			; ...just in case...
 	STAB 0,X			; ...is now the owner of this resource
 	PULA				; *** retrieve saved flags ***
 	_NO_CRIT
@@ -184,7 +184,7 @@ ci_manage:
 ci_event:
 	CMPA #16			; is it DLE?
 	BNE ci_notdle		; otherwise check next
-		STAA cin_mode, X	; *set binary mode! puts 16, safer and faster!
+		STAA 0,X		; *set binary mode! puts 16, safer and faster! eeeeeeeeeeeek
 		_ERR(EMPTY)			; and supress received character (will NOT stay locked!)******************
 ci_notdle:
 	CMPA #3				; is it ^C? (TERM)
@@ -229,103 +229,74 @@ blin:
 	BNE ci_port			; specified (4)
 		LDAB std_in			; default input device (3)
 	BNE ci_port			; eeeeeeeeeek (4)
-		LDAB #DEVICE		; *** somewhat ugly hack *** (2)
+		LDAB deflt_in		; get system global instead (3)
 ci_port:
 	BPL ci_nph			; logic device (4)
-		JSR cio_phys		; check physical devices and try to get char... but come back for events! (9)
-			BCS ci_exit			; some error, send it back (4)
-; *** check for some logical devices ***
-ci_nph:
-; only logical devs, no need to check for windows or filesystem
-	CMPB #DEV_RND		; getting a random number? (2)
-		BEQ ci_rnd			; compute it! (4)
-	CMPB #DEV_NULL		; lastly, ignore input (2)
-		BNE cio_nfound		; final error otherwise (4)
-; otherwise must fill buffer with zeroes like /dev/zero!!!
-	BSR ci_last		; get end address (+1)
-	LDAA #0			; STAA is faster than CLR
-ci_nl:
-		DEX			; reverse loop
-		STAA 0,X		; clear byte
-		CPX bl_ptr		; compare against buffer start
-		BNE ci_nl		; until done
-cinr_end:
-	LDX #0			; no remaining bytes
-	STX bl_siz
-	_EXIT_OK			; "/dev/null" and "/dev/rnd" are always OK (7)
-
-ci_rnd:
-; *** generate random number *** placeholder
-	BSR ci_last		; get end address (+1)
-ci_rl:
-		DEX			; reverse loop
-		LDAA ticks+3		; simple placeholder (3)
-		STAA 0,X		; clear byte
-		CPX bl_ptr		; compare against buffer start
-		BNE ci_rl		; until done
-	BRA binr_end		; clear remaining and exit (4)
-
-; *** common routine (NULL & RND) for computing last address (+1) in buffer ***
-ci_last:
-#ifdef	MC6801
-	LDD bl_ptr		; get pointer
-	ADDD bl_siz		; add size for last address
-	STD local1		; store pointer for X...
-#else
-	LDAA bl_ptr		; get pointer
-	LDAB bl_ptr+1
-	ADDB bl_siz+1		; add size for last address
-	ADCA bl_siz
-	STAA local1		; store pointer for X...
-	STAB local1+1
-#endif
-	LDX local1		; get end address (+1)
-	RTS
-; ******************************* 6502 6502 *********************************
-	TYA					; for indexed comparisons
-	BNE ci_port			; specified
-		LDA std_in			; new per-process standard device
-		BNE ci_port			; already a valid device
-			LDA deflt_in		; otherwise get system global
-ci_port:
-	BPL ci_nph			; logic device
 ; new MUTEX for CIN, physical devs only!
-	ASL					; convert to proper physdev index (2)
-	STA iol_dev			; keep physdev temporarily, worth doing here (3)
+		ASLB				; convert to proper physdev index (2)
+		STAB iol_dev		; keep physdev temporarily, worth doing here (3)
+; now must compute pointer to locks array
+#ifdef	MC6801
+		LDX #cio_lock		; get locks table base pointer (3)
+		ABX					; compute entry address! ()
+		STX local1			; eeeeeeeeeek
+#else
+		ADDB #<cio_lock		; add offset to base LSB... ()
+		STAB local1+1		; ...save temporarily... (check conflicts!!!)
+		LDAB #0
+		ADCB #>cio_lock		; ...and propagate carry to MSB ()
+		STAB local1			; pointer is complete (see above)
+#endif
 ; * this has to be done atomic! *
-	_CRITIC
+		_CRITIC
+		PSHA				; will need to keep status????????????
 ci_loop:
-	LDX iol_dev			; *restore previous status (3)
-	LDA cio_lock, X		; *check whether THAT device in use (4)
-	BEQ ci_lckd			; resume operation if free (3)
+			LDX local1			; point to lock, check conflicts!
+			LDAB 0,X			; *check whether THAT device in use ()
+				BEQ ci_lckd			; resume operation if free ()
 ; otherwise yield CPU time and repeat
 ; but first check whether it was me (waiting on binary mode)
-		LDA run_pid			; who am I?
-		CMP cio_lock, X		; *was it me who locked? (4)
-			BEQ ci_lckdd		; *if so, resume execution (3)
+			LDAB run_pid		; who am I?
+			CMPB 0,X			; *was it me who locked? ()
+				BEQ ci_lckdd		; *if so, resume execution ()
 ; if the above, could first check whether the device is in binary mode, otherwise repeat loop!
 ; continue with regular mutex
-		_KERNEL(B_YIELD)	; otherwise yield CPU time and repeat *** could be patched!
-		_BRA ci_loop		; try again! (3)
+			_KERNEL(B_YIELD)	; otherwise yield CPU time and repeat *** could be patched!
+			BRA ci_loop			; try again! (4)
 ci_lckd:
-	LDA run_pid			; who is me?
-	STA cio_lock, X		; *reserve this (4)
+		LDAB run_pid		; who is me?
+		LDX local1			; ...just in case
+		STAB 0,X			; *reserve this (4)
 ci_lckdd:
-	_NO_CRIT
+		PULA				; retrieve flags for end of critical section
+		_NO_CRIT
 ; * end of atomic operation *
-		JSR ci_call			; direct CALL!!!
+; now compute direct driver address
+		LDAB iol_dev		; retrieve this index!
+#ifdef	MC6801
+		LDX #drv_opt		; get output routines table base pointer (3)
+		ABX					; compute entry address! ()
+#else
+		ADDB #<drv_opt		; add offset to base LSB... ()
+		STAB local2+1		; ...save temporarily... (check conflicts!!!)
+		LDAB #0
+		ADCB #>drv_opt		; ...and propagate carry to MSB ()
+		STAB local2			; pointer is complete... (see above)
+		LDX local2			; ...and ready to use
+#endif
+		JSR 0,X				; call driver and return
 			BCS cio_unlock		; clear MUTEX and return whatever error!
 
 ; ** EVENT management no longer here **
 
 ; logical devices management, * placeholder
 ci_nph:
-	CMP #64				; within window devices?
-		BCC ci_win			; below that, should be window manager
+	CMPB #64			; within window devices?
+		BLT ci_win			; below that, should be window manager
 ; ** optional filesystem access **
 #ifdef	FILESYSTEM
-	CMP #64+MX_FILES	; still within file-devs?
-		BCS ci_log			; that or over, not a file
+	CMPB #64+MX_FILES	; still within file-devs?
+		BGE ci_log			; that or over, not a file
 ; *** manage here input from open file ***
 #endif
 ; *** virtual window manager TO DO ***
@@ -333,61 +304,55 @@ ci_win:
 	_ERR(NO_RSRC)		; not yet implemented ***placeholder***
 ; manage logical devices...
 ci_log:
-	CMP #DEV_RND		; getting a random number?
+	CMPB #DEV_RND		; getting a random number?
 		BEQ ci_rnd			; compute it!
-	CMP #DEV_NULL		; lastly, ignore input...
+	CMPB #DEV_NULL		; lastly, ignore input...
 		BEQ ci_ok			; but work like "/dev/zero"
 	JMP cio_nfound		; final error otherwise
 
-ci_rnd:
-; *** generate random number (TO DO) ***
-	LDY #0				; reset index
-	LDX bl_ptr+1			; keep MSB just in case***
-cirn_loop:
-		LDA ticks			; simple placeholder******* eeeeeeek
-		STA (bl_ptr), Y			; store in buffer
-		INY				; go for next
-		BNE cirn_nw			; no wrap...
-			INC bl_ptr+1			; ...or next page*****
-cirn_nw:
-		DEC bl_siz			; one less to go
-		BNE cirn_loop			; no boundary crossing...
-			DEC bl_siz+1			; ...or propagate...
-			LDA bl_siz+1			; ...and check value...
-			CMP #$FF			; ...whether wrapped...
-		BNE cirn_loop			; ...until the end
-	STX bl_ptr+1			; restore pointer***
-ci_ok:
-	_EXIT_OK
 ci_null:
 ; reading from DEV_NULL works like /dev/zero, must fill buffer with zeroes!
-		LDX bl_siz		; LSB as offset
-			BEQ ci_nlw		; empty perhaps?
-		LDA #0			; fill buffer with this
-		TAY			; reset ascending offset
-ci_nll:
-			STA (bl_ptr), Y		; put a zero into buffer
-			INY			; try one more
-			BNE ci_ny		; no wrap yet
-				INC bl_ptr+1		; or increment MSB*** but save it!!
-ci_ny:
-			DEC bl_siz		; one less to go
-			BNE cl_nll
-ci_nlw:
-		LDX bl_siz+1		; check MSB
-			BEQ ci_nle		; all done!
-		DEC bl_siz+1		; or continue
-		_BRA ci_nll
-ci_nle:
-; placeholder exit, must restore altered pointer
-	_EXIT_OK
+; must fill buffer with zeroes like /dev/zero!!!
+	BSR ci_last			; get end address (+1)
+	LDAA #0				; STAA is faster than CLR
+ci_nl:
+		DEX					; reverse loop
+		STAA 0,X			; clear byte
+		CPX bl_ptr			; compare against buffer start
+		BNE ci_nl			; until done
+cinr_end:
+	LDX #0				; no remaining bytes
+	STX bl_siz
+ci_ok:
+	_EXIT_OK			; "/dev/null" and "/dev/rnd" are always OK (7)
 
-; *** for 02 systems without indexed CALL ***
-co_call:
-	_JMPX(drv_opt)		; direct jump to output routine
+ci_rnd:
+; *** generate random number *** placeholder
+	BSR ci_last			; get end address (+1)
+ci_rl:
+		DEX					; reverse loop
+		LDAA ticks+3		; simple placeholder (3)
+		STAA 0,X			; clear byte
+		CPX bl_ptr			; compare against buffer start
+		BNE ci_rl			; until done
+	BRA cinr_end		; clear remaining and exit (4)
 
-ci_call:
-	_JMPX(drv_ipt)		; direct jump to input routine
+; *** common routine (NULL & RND) for computing last address (+1) in buffer ***
+ci_last:
+#ifdef	MC6801
+	LDD bl_ptr			; get pointer
+	ADDD bl_siz			; add size for last address
+	STD local1			; store pointer for X...
+#else
+	LDAA bl_ptr			; get pointer
+	LDAB bl_ptr+1
+	ADDB bl_siz+1		; add size for last address
+	ADCA bl_siz
+	STAA local1			; store pointer for X...
+	STAB local1+1
+#endif
+	LDX local1			; get end address (+1)
+	RTS
 
 ; ******************************
 ; *** MALLOC, reserve memory *** 6502 6502 6502
