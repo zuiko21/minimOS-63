@@ -2,7 +2,7 @@
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
 ; v0.6a3
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170922-1437
+; last modified 20170922-1907
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -369,9 +369,11 @@ ci_last:
 ; ram_pos, ram_stat (+MAX_LIST), ram_pid (+2*MAX_LIST)
 
 malloc:
-;	LDAB #0				; reset index
+#ifdef	SAFE
+	LDAB #0				; reset index
+#endif
 	LDX #ram_pos		; MUST be the first array in memory (assume MAX_LIST < 85)
-	STX local1			; keep in case (check conflicts!)
+;	STX local1			; keep in case (check conflicts!)
 	LDAA ma_rs+1		; check individual bytes, just in case, MUCH faster than TST
 	BEQ ma_nxpg			; no extra page needed
 		INC ma_rs			; otherwise increase number of pages
@@ -560,7 +562,7 @@ ma_room:
 
 
 ; ****************************
-; *** FREE, release memory *** 6502 6502 6502
+; *** FREE, release memory ***
 ; ****************************
 ;		INPUT
 ; ma_pt = addr
@@ -568,21 +570,22 @@ ma_room:
 ; C = no such used block
 ;
 ; ram_pos & ram_stat are kernel structures
+; see MALLOC for array requisites
 
 free:
 #ifdef	SAFE
-	LDY ma_pt			; LSB currently not implemented
+	LDAA ma_pt			; LSB currently not implemented
 		BNE fr_nos			; could not find
 #endif
-	LDX #0				; reset index
-	LDA ma_pt+1			; get comparison PAGE eeeeeeeeek
+	LDX #ram_pos			; reset index, first array!
+	LDAB ma_pt			; get comparison PAGE eeeeeeeeek
 	_CRITIC			; supposedly dangerous
 fr_loop:
-		CMP ram_pos, X		; is what we are looking for?
+		CMPB 0,X		; is what we are looking for?
 			BEQ fr_found		; go free it!
 		INX					; advance index
-		LDY ram_stat, X		; anyway check status
-		CPY #END_RAM		; no more in list?
+		LDAB MAX_LIST,X		; anyway check status
+		CMPB #END_RAM		; no more in list?
 		BNE fr_loop			; continue until end
 ; was not found, thus exit CS and abort
 fr_no:
@@ -590,25 +593,23 @@ fr_no:
 fr_nos:
 	_ERR(N_FOUND)		; no block to be freed!
 fr_found:
-	LDY ram_stat, X		; only used blocks can be freed!
-	CPY #USED_RAM		; was it in use?
+	LDAB MAX_LIST,X		; only used blocks can be freed!
+	CMPB #USED_RAM		; was it in use?
 		BNE fr_no			; if not, cannot free it!
-	LDA #FREE_RAM		; most likely zero, might use STZ instead
-	STA ram_stat, X		; this block is now free, but...
+	LDAB #FREE_RAM		; most likely zero, might use STZ instead
+	STAB MAX_LIST,X		; this block is now free, but...
 ; really should join possible adjacent free blocks
-	LDY ram_stat+1, X	; check status of following entry
-;	CPY #FREE_RAM		; was it free? could be supressed if value is zero
+	LDAB MAX_LIST+1, X	; check status of following entry
+;	CMPB #FREE_RAM		; was it free? could be supressed if value is zero
 	BNE fr_notafter		; was not free, thus nothing to optimise forward
-		_PHX				; keep actual position eeeeeeeek
 		JSR fr_join			; integrate following free block
-		_PLX				; retrieve position
 	BEQ fr_ok			; if the first block, cannot look back eeeeeeeeeek
 fr_notafter:
-	TXA					; check whether it was the first block
+	CPX #ram_pos				; check whether it was the first block
 		BEQ fr_ok			; do not even try to look back eeeeeeeeeeek
 	DEX					; let us have a look to the previous block
-	LDY ram_stat, X		; is this one free?
-;	CPY #FREE_RAM		; could be supressed if value is zero
+	LDAB MAX_LIST,X		; is this one free?
+;	CMPB #FREE_RAM		; could be supressed if value is zero
 	BNE fr_ok			; nothing to optimise backwards
 		JSR fr_join			; otherwise integrate it too
 ; ** already optimized **
@@ -619,13 +620,13 @@ fr_ok:
 ; routine for obliterating the following empty entry
 fr_join:
 		INX					; go for next entry
-		LDA ram_pos+1, X	; get following address
-		STA ram_pos, X		; store one entry below
-		LDA ram_pid+1, X	; copy PID of following, but keep status for last!
-		STA ram_pid, X		; no longer interleaved
-		LDA ram_stat+1, X	; check status of following!
-		STA ram_stat, X		; store one entry below
-		CMP #END_RAM		; end of list?
+		LDAB 1,X		; get following address
+		STAB 0,X		; store one entry below
+		LDAB 2*MAX_LIST+1,X	; copy PID of following, but keep status for last!
+		STAB 2*MAX_LIST,X		; no longer interleaved
+		LDAB MAX_LIST+1,X	; check status of following!
+		STAB MAX_LIST,X		; store one entry below
+		CMPB #END_RAM		; end of list?
 		BNE fr_join			; repeat until done
 	DEX					; return to previous position
 	RTS
