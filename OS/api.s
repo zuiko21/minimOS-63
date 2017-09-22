@@ -2,7 +2,7 @@
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
 ; v0.6a3
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170922-1916
+; last modified 20170922-1948
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -467,7 +467,7 @@ ma_nobank:
 	_NO_CRIT			; non-critical when aborting!
 	_ERR(FULL)			; no room for it!
 ma_found:
-	JSR ma_alsiz		; **compute size according to alignment mask**
+	BSR ma_alsiz		; **compute size according to alignment mask**
 	CMP ma_rs+1			; compare (5)
 		BCC ma_cont			; smaller, thus continue searching (2/3)
 ; here we go! first of all check whether aligned or not
@@ -479,7 +479,7 @@ ma_falgn:
 		ORA ma_align		; set disturbing bits...
 		_INC				; ...and reset them after increasing the rest
 		PHA					; need to keep the new aligned pointer!
-		JSR ma_adv			; create room for assigned block (BEFORE advancing eeeeeeeek)
+		BSR ma_adv			; create room for assigned block (BEFORE advancing eeeeeeeek)
 		INX					; skip the alignment blank
 		PLA					; retrieve aligned address
 ; must recompute ram_pos pointer!!! ...or preserve it on ma_adv
@@ -490,7 +490,7 @@ ma_aok:
 	CMP ma_rs+1			; compare this block with requested size eeeeeeeek
 	BEQ ma_updt			; was same size, will not generate new entry
 ; **should I correct stack balance for safe mode?
-		JSR ma_adv			; make room otherwise, and set the following one as free padding
+		BSR ma_adv			; make room otherwise, and set the following one as free padding
 ; create after the assigned block a FREE entry!
 ; must recompute pointers!!! ...or preserve them on ma_adv
 		LDA ram_pos, X		; newly assigned slice will begin there eeeeeeeeeek
@@ -530,8 +530,6 @@ ma_fit:
 	RTS
 
 ; **** routine for making room for an entry **** 6502
-; uses B as index, assume local1 & local2 as ram_pos & ram_stat
-; ...but will alter them!!!
 ma_adv:
 	STX ma_ix			; store current index
 ma_2end:
@@ -602,7 +600,7 @@ fr_found:
 	LDAB MAX_LIST+1, X	; check status of following entry
 ;	CMPB #FREE_RAM		; was it free? could be supressed if value is zero
 	BNE fr_notafter		; was not free, thus nothing to optimise forward
-		JSR fr_join			; integrate following free block
+		BSR fr_join			; integrate following free block
 	BEQ fr_ok			; if the first block, cannot look back eeeeeeeeeek
 fr_notafter:
 	CPX #ram_pos				; check whether it was the first block
@@ -611,7 +609,7 @@ fr_notafter:
 	LDAB MAX_LIST,X		; is this one free?
 ;	CMPB #FREE_RAM		; could be supressed if value is zero
 	BNE fr_ok			; nothing to optimise backwards
-		JSR fr_join			; otherwise integrate it too
+		BSR fr_join			; otherwise integrate it too
 ; ** already optimized **
 fr_ok:
 	_NO_CRIT
@@ -738,9 +736,9 @@ sig_kill:
 	TST sd_flag			; some pending action? (6)
 	BEQ rst_shell		; if not, just restart the shell (4)
 		LDAB #PW_CLEAN		; or go into second phase... (2)
-		JSR shutdown		; ...of shutdown procedure (could use JMP) (9)
+		_KERNEL(SHUTDOWN)		; ...of shutdown procedure (could be patched)
 ; if none of the above, a single task system can only restart the shell!
-rst_shell:
+rst_shell:;********revise
 	LDS #SPTR			; init stack again (in case SIGKILL was called) (3)
 	JMP sh_exec			; back to kernel shell! (3)
 
@@ -814,7 +812,7 @@ set_handler:
 ; ***** GET_PID, get current PID ******
 ; *************************************
 get_pid:
-	LDAB run_pìd				; no multitasking will give a system reserved PID
+	LDAB run_pid				; no multitasking will give a system reserved PID
 	_EXIT_OK
 
 ; **************************************************************
@@ -948,7 +946,8 @@ str_loop:
 		INC bl_siz			; or update MSB
 		BRA str_loop
 str_end:
-	JMP blout		; proceed and return!
+	_KERNEL(BOUT)		; proceed...
+	RTS			; ...and return!
 
 ; ******************************
 ; *** READLN, buffered input *** new 20161223
@@ -967,7 +966,7 @@ readLN:
 rl_l:
 ; no-one to yield to!
 		LDAB rl_dev			; use device (3)
-		JSR cin				; get one character (...)
+		_KERNEL(CIN)				; get one character (...)
 		BCC rl_rcv			; got something (4)
 			CMPB #EMPTY			; otherwise is just waiting? (2)
 		BEQ rl_l			; continue then (4)
@@ -997,13 +996,13 @@ rl_nbs:
 rl_echo:
 		STX loc_str			; update pointer (5)
 		LDAB rl_dev			; retrieve device (3)
-		JSR cout			; echo received character (...)
+		_KERNEL(COUT)			; echo received character (...)
 		BRA rl_l			; and continue (4)
 rl_cr:
 	LDAA #CR			; newline (2)
 	STAA io_c			; EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEK (4)
 	LDAB rl_dev			; retrieve device (3)
-	JSR cout			; print newline ignoring errors (...)
+	_KERNEL(COUT)			; print newline ignoring errors (...)
 	LDX loc_str			; retrieve cursor!!!!! (4)
 	CLR 0,X				; terminate string (7)
 	_EXIT_OK			; and all done! (7)
@@ -1069,7 +1068,8 @@ shutdown:
 	CLRB				; PID=0 means ALL braids (2)
 	LDAA #SIGTERM		; will be asked to terminate (2)
 	STAA b_sig			; store signal type (4)
-	JMP signal			; ask braids to terminate, will return to task until the end (...)
+	_KERNEL(B_SIGNAL)		; ask braids to terminate, will return
+	RTS
 ; ** the real stuff starts here **
 sd_2nd:
 ; now let's disable all drivers
@@ -1482,13 +1482,13 @@ rls_next:
 ; *** SET_CURR, set internal kernel info for running task ***
 ; ***********************************************************
 ;		INPUT
-; Y			= PID
+; B			= PID
 ; affects internal sysvar run_pid
 ; run_arch not supported in 8-bit mode
 
 set_curr:
 ; does not check for valid PID... hopefully the multitasking driver (the only one expected to call this) does
-	STY run_pid			; store PID into kernel variables (4)
+	STAB run_pid			; store PID into kernel variables (4)
 	_EXIT_OK
 
 ; *******************************
