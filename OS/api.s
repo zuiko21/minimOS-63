@@ -2,7 +2,7 @@
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
 ; v0.6a3
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170922-1104
+; last modified 20170922-1437
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -365,9 +365,13 @@ ci_last:
 ; ma_rs	= actual size (esp. if ma_rs was 0, but check LSB too)
 ; C		= not enough memory/corruption detected
 ;		USES ma_ix.b
+; best to assume fixed distance between system arrays!!!
+; ram_pos, ram_stat (+MAX_LIST), ram_pid (+2*MAX_LIST)
 
 malloc:
-	LDAB #0				; reset index
+;	LDAB #0				; reset index
+	LDX #ram_pos		; MUST be the first array in memory (assume MAX_LIST < 85)
+	STX local1			; keep in case (check conflicts!)
 	LDAA ma_rs+1		; check individual bytes, just in case, MUCH faster than TST
 	BEQ ma_nxpg			; no extra page needed
 		INC ma_rs			; otherwise increase number of pages
@@ -380,56 +384,34 @@ ma_nxpg:
 ; otherwise check for biggest available block
 ma_biggest:
 #ifdef	SAFE
-			CMPB #MAX_LIST		; already past?
-				BEQ ma_corrupt		; something was wrong!!!
+		CMPB #MAX_LIST		; already past?
+			BEQ ma_corrupt		; something was wrong!!!
 ; *** self-healing feature for full memory assignment! ***
-#ifdef	MC6801
-			LDX #ram_pos		; prepare to get pointer
-			ABX					; simple offset!
-			STX local1			; will be used afterwards
-#else
-			LDAA #<ram_pos		; base LSB
-			ABA					; add offset!
-			STAA local1+1		; check conflicts!
-			CLRA				; go for MSB
-			ADCA #>ram_pos		; propagate carry!
-			STAA local1			; pointer is done...
-			LDX local1			; ...and ready to use
+; X already points to ram_pos array
+		LDAA 1,X			; get end position
+		SUBA 0,X			; subtract current for size!
+			BCS ma_corrupt		; corruption detected!
 #endif
-			LDAA 1,X			; get end position
-			SUBA 0,X			; subtract current for size!
-				BCS ma_corrupt		; corruption detected!
-#endif
-; now compute ram_stat pointer
-#ifdef	MC6801
-			LDX #ram_stat		; prepare to get pointer
-			ABX					; simple offset!
-			STX local2			; will be used afterwards
-#else
-			LDAA #<ram_stat		; base LSB
-			ABA					; add offset!
-			STAA local2+1		; check conflicts!
-			CLRA				; go for MSB
-			ADCA #>ram_stat		; propagate carry!
-			STAA local2			; pointer is done...
-			LDX local2			; ...and ready to use
-#endif
-
-			LDAA 0,X			; get status of block
-;			CMPA #FREE_RAM		; not needed if FREE_RAM is zero! (2)
-			BNE ma_nxbig		; go for next as this one was not free
-				BSR ma_alsiz		; **compute size according to alignment mask**
-				CMP ma_rs+1			; compare against current maximum (3)
-				BCC ma_nxbig		; this was not bigger (3/2)
-					STA ma_rs+1			; otherwise keep track of it... (3)
-					STX ma_ix			; ...and its index! (3)
+; ram_stat is just MAX_LIST bytes ahead
+		LDAA MAX_LIST,X			; get status of block
+;		CMPA #FREE_RAM		; not needed if FREE_RAM is zero! (2)
+		BNE ma_nxbig		; go for next as this one was not free
+			BSR ma_alsiz		; **compute size according to alignment mask**
+				CMPA ma_rs			; compare against current maximum (3)
+				BLT ma_nxbig		; this was not bigger
+					STA ma_rs			; otherwise keep track of it... (3)
+					STX ma_ix			; ...and its index!
 ma_nxbig:
-			INX					; advance index (2)
-			LDY ram_stat, X		; peek next status (4)
-			CPY #END_RAM		; check whether at end (2)
-			BNE ma_biggest		; or continue (3/2)
+		INX					; advance index
+#ifdef	SAFE
+		INCB
+#endif
+		STX local1			; update value, really needed?
+		LDAA MAX_LIST,X		; peek next status
+		CMPA #END_RAM		; check whether at end (2)
+			BNE ma_biggest		; or continue
 ; is there at least one available block?
-		LDA ma_rs+1			; should not be zero
+		LDAA ma_rs			; should not be zero
 		BNE ma_fill			; there is at least one block to allocate
 			PULA				; retrieve flags!
 			_NO_CRIT			; eeeeeeek! we are going
@@ -437,35 +419,38 @@ ma_nxbig:
 ; report allocated size
 ma_fill:
 		LDX ma_ix			; retrieve index
-		_BRA ma_falgn		; nothing to scan, only if aligned eeeeeek
+		BRA ma_falgn		; nothing to scan, only if aligned eeeeeek
 ma_scan:
 ; *** this is the place for the self-healing feature! ***
 #ifdef	SAFE
-		CPX #MAX_LIST		; already past?
+		CMPB #MAX_LIST		; already past?
 			BEQ ma_corrupt		; something was wrong!!!
 ; check UNALIGNED size for self-healing feature! worth a routine?
+; ********* 6502 below ***********
 		LDA ram_pos+1, X	; get end position (4)
 		SEC
 		SBC ram_pos, X		; subtract current for size! (2+4)
 		BCS ma_nobad		; no corruption was seen (3/2) **instead of BPL** eeeeeek
 ma_corrupt:
-			LDX #>user_ram		; otherwise take beginning of user RAM...
-			LDY #<user_ram		; LSB misaligned?
+; **** 6800 ****
+			LDAA #>user_ram		; otherwise take beginning of user RAM...
+			LDAB #<user_ram		; LSB misaligned?
 			BEQ ma_zlsb			; nothing to align
-				INX					; otherwise start at next page
+				INCA				; otherwise start at next page
 ma_zlsb:
-			LDY #LOCK_RAM		; ...that will become locked (new value)
-			STX ram_pos			; create values
-			STY ram_stat		; **should it clear the PID field too???**
-			LDA #SRAM			; physical top of RAM...
-			LDY #END_RAM		; ...as non-plus-ultra
-			STA ram_pos+1		; create second set of values
-			STY ram_stat+1
+			LDAB #LOCK_RAM		; ...that will become locked (new value)
+			STAA ram_pos		; create values
+			STAB ram_stat		; **should it clear the PID field too???**
+			LDAA #SRAM			; physical top of RAM...
+			LDAB #END_RAM		; ...as non-plus-ultra
+			STAA ram_pos+1		; create second set of values
+			STAB ram_stat+1
 			PULA				; retrieve flags
 			_NO_CRIT			; eeeeeeeeeek
 			_ERR(CORRUPT)		; report but do not turn system down
 ma_nobad:
 #endif
+; **************** CONTINUE HERE ***************** 6502 ***************
 		LDY ram_stat, X		; get state of current entry (4)
 ;		CMP #FREE_RAM		; looking for a free one (2) not needed if free is zero
 			BEQ ma_found		; got one (2/3)
@@ -495,6 +480,7 @@ ma_falgn:
 		JSR ma_adv			; create room for assigned block (BEFORE advancing eeeeeeeek)
 		INX					; skip the alignment blank
 		PLA					; retrieve aligned address
+; must recompute ram_pos pointer!!! ...or preserve it on ma_adv
 		STA ram_pos, X		; update pointer on assigned block
 ma_aok:
 	PLA					; retrieve size
@@ -504,6 +490,7 @@ ma_aok:
 ; **should I correct stack balance for safe mode?
 		JSR ma_adv			; make room otherwise, and set the following one as free padding
 ; create after the assigned block a FREE entry!
+; must recompute pointers!!! ...or preserve them on ma_adv
 		LDA ram_pos, X		; newly assigned slice will begin there eeeeeeeeeek
 		CLC
 		ADC ma_rs+1			; add number of assigned pages
@@ -541,6 +528,8 @@ ma_fit:
 	RTS
 
 ; **** routine for making room for an entry **** 6502
+; uses B as index, assume local1 & local2 as ram_pos & ram_stat
+; ...but will alter them!!!
 ma_adv:
 	STX ma_ix			; store current index
 ma_2end:
