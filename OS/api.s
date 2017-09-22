@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel API
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
-; v0.6a2
+; v0.6a3
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170921-1234
+; last modified 20170922-1104
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -355,7 +355,7 @@ ci_last:
 	RTS
 
 ; ******************************
-; *** MALLOC, reserve memory *** 6502 6502 6502
+; *** MALLOC, reserve memory *** translating from 6502
 ; ******************************
 ;		INPUT
 ; ma_rs		= size (0 means reserve as much memory as available)
@@ -365,33 +365,60 @@ ci_last:
 ; ma_rs	= actual size (esp. if ma_rs was 0, but check LSB too)
 ; C		= not enough memory/corruption detected
 ;		USES ma_ix.b
-; ram_stat & ram_pid (= ram_stat+1) are interleaved in minimOS-16
 
 malloc:
-	LDX #0				; reset index
-	LDY ma_rs			; check individual bytes, just in case
+	LDAB #0				; reset index
+	LDAA ma_rs+1		; check individual bytes, just in case, MUCH faster than TST
 	BEQ ma_nxpg			; no extra page needed
-		INC ma_rs+1			; otherwise increase number of pages
-		STX ma_rs			; ...and just in case, clear asked bytes!
+		INC ma_rs			; otherwise increase number of pages
+		STAB ma_rs+1		; ...and just in case, clear asked bytes!
 ma_nxpg:
-	_CRITIC			; this is dangerous! enter critical section, new 160119
-	LDA ma_rs+1			; get number of asked pages
+	_CRITIC				; this is dangerous! enter critical section, new 160119
+	PSHA				; must keep this...
+	LDAA ma_rs			; get number of asked pages
 	BNE ma_scan			; work on specific size
 ; otherwise check for biggest available block
 ma_biggest:
 #ifdef	SAFE
-			CPX #MAX_LIST		; already past?
+			CMPB #MAX_LIST		; already past?
 				BEQ ma_corrupt		; something was wrong!!!
 ; *** self-healing feature for full memory assignment! ***
-			LDA ram_pos+1, X	; get end position (4)
-			SEC
-			SBC ram_pos, X		; subtract current for size! (2+4)
-				BCC ma_corrupt		; corruption detected!
+#ifdef	MC6801
+			LDX #ram_pos		; prepare to get pointer
+			ABX					; simple offset!
+			STX local1			; will be used afterwards
+#else
+			LDAA #<ram_pos		; base LSB
+			ABA					; add offset!
+			STAA local1+1		; check conflicts!
+			CLRA				; go for MSB
+			ADCA #>ram_pos		; propagate carry!
+			STAA local1			; pointer is done...
+			LDX local1			; ...and ready to use
 #endif
-			LDY ram_stat, X		; get status of block (4)
-;			CPY #FREE_RAM		; not needed if FREE_RAM is zero! (2)
-			BNE ma_nxbig		; go for next as this one was not free (3/2)
-				JSR ma_alsiz		; **compute size according to alignment mask**
+			LDAA 1,X			; get end position
+			SUBA 0,X			; subtract current for size!
+				BCS ma_corrupt		; corruption detected!
+#endif
+; now compute ram_stat pointer
+#ifdef	MC6801
+			LDX #ram_stat		; prepare to get pointer
+			ABX					; simple offset!
+			STX local2			; will be used afterwards
+#else
+			LDAA #<ram_stat		; base LSB
+			ABA					; add offset!
+			STAA local2+1		; check conflicts!
+			CLRA				; go for MSB
+			ADCA #>ram_stat		; propagate carry!
+			STAA local2			; pointer is done...
+			LDX local2			; ...and ready to use
+#endif
+
+			LDAA 0,X			; get status of block
+;			CMPA #FREE_RAM		; not needed if FREE_RAM is zero! (2)
+			BNE ma_nxbig		; go for next as this one was not free
+				BSR ma_alsiz		; **compute size according to alignment mask**
 				CMP ma_rs+1			; compare against current maximum (3)
 				BCC ma_nxbig		; this was not bigger (3/2)
 					STA ma_rs+1			; otherwise keep track of it... (3)
@@ -404,6 +431,7 @@ ma_nxbig:
 ; is there at least one available block?
 		LDA ma_rs+1			; should not be zero
 		BNE ma_fill			; there is at least one block to allocate
+			PULA				; retrieve flags!
 			_NO_CRIT			; eeeeeeek! we are going
 			_ERR(FULL)			; otherwise no free memory!
 ; report allocated size
@@ -433,6 +461,7 @@ ma_zlsb:
 			LDY #END_RAM		; ...as non-plus-ultra
 			STA ram_pos+1		; create second set of values
 			STY ram_stat+1
+			PULA				; retrieve flags
 			_NO_CRIT			; eeeeeeeeeek
 			_ERR(CORRUPT)		; report but do not turn system down
 ma_nobad:
@@ -447,6 +476,7 @@ ma_cont:
 ;		CPX #MAX_LIST		; until the end (2)
 		BNE ma_scan			; will not be zero anyway (3)
 ma_nobank:
+	PULA				; retrieve flags!
 	_NO_CRIT			; non-critical when aborting!
 	_ERR(FULL)			; no room for it!
 ma_found:
@@ -490,24 +520,27 @@ ma_updt:
 	LDA run_pid			; who asked for this? FASTER
 	STA ram_pid, X		; store PID
 ; theoretically we are done, end of CS
+	PULA				; retrieve flags!
 	_NO_CRIT			; end of critical section, new 160119
 	_EXIT_OK			; we're done
 
 ; **** routine for aligned-block size computation ****
 ; returns found size in A, sets C if OK, error otherwise (C clear!)
+; assumes precomputed pointer in local1 (ram_pos)
 ma_alsiz:
-	LDA ram_pos, X		; get bottom address (4)
-	BIT ma_align		; check for set bits from mask (4)
-	BEQ ma_fit			; none was set, thus already aligned (3/2)
-		ORA ma_align		; set masked bits... (3)
-		_INC				; ...and increase address for alignment (2)
+	LDX local1			; computed pointer
+	LDAA 0,X			; get bottom address
+	BITA ma_align		; check for set bits from mask
+	BEQ ma_fit			; none was set, thus already aligned
+		ORAA ma_align		; set masked bits...
+		INCA				; ...and increase address for alignment
 ma_fit:
-	EOR #$FF			; invert bits as will be subtracted to next entry (2)
-	SEC					; needs one more for twos-complement (2)
-	ADC ram_pos+1, X	; compute size from top ptr MINUS bottom one (5)
+	EORA #$FF			; invert bits as will be subtracted to next entry
+	SEC					; needs one more for twos-complement
+	ADCA 1,X			; compute size from top ptr MINUS bottom one
 	RTS
 
-; **** routine for making room for an entry ****
+; **** routine for making room for an entry **** 6502
 ma_adv:
 	STX ma_ix			; store current index
 ma_2end:
