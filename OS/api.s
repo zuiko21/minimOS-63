@@ -2,7 +2,7 @@
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
 ; v0.6a3
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170922-1907
+; last modified 20170922-1916
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -619,16 +619,14 @@ fr_ok:
 
 ; routine for obliterating the following empty entry
 fr_join:
-		INX					; go for next entry
-		LDAB 1,X		; get following address
-		STAB 0,X		; store one entry below
-		LDAB 2*MAX_LIST+1,X	; copy PID of following, but keep status for last!
-		STAB 2*MAX_LIST,X		; no longer interleaved
-		LDAB MAX_LIST+1,X	; check status of following!
-		STAB MAX_LIST,X		; store one entry below
+		LDAB 2,X		; get following address
+		STAB 1,X		; store one entry below
+		LDAB 2*MAX_LIST+2,X	; copy PID of following, but keep status for last!
+		STAB 2*MAX_LIST+1,X		; no longer interleaved
+		LDAB MAX_LIST+2,X	; check status of following!
+		STAB MAX_LIST+1,X		; store one entry below
 		CMPB #END_RAM		; end of list?
 		BNE fr_join			; repeat until done
-	DEX					; return to previous position
 	RTS
 
 
