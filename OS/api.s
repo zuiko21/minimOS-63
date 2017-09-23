@@ -2,7 +2,7 @@
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
 ; v0.6a4
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170923-1616
+; last modified 20170923-1626
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -423,11 +423,11 @@ ma_scan:
 		SUBB 0,X		; subtract current for size!
 		BCC ma_nobad		; no corruption was seen
 ma_corrupt:
-			LDAB #>user_ram		; otherwise take beginning of user RAM...
-			TSTB #<user_ram		; LSB misaligned?
+			LDAB #<user_ram		; LSB misaligned?
 			BEQ ma_zlsb			; nothing to align
-				INCB				; otherwise start at next page
+				LDAB #1			; ...or start at next page
 ma_zlsb:
+			ADDB #>user_ram		; this page is beginning of user RAM
 			STAB ram_pos		; create values
 			LDAB #LOCK_RAM		; ...that will become locked (new value)
 			STAB ram_stat		; **should it clear the PID field too???**
