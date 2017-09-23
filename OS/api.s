@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel API
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
-; v0.6a3
+; v0.6a4
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170923-1021
+; last modified 20170923-1616
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -369,53 +369,44 @@ ci_last:
 ; ram_pos, ram_stat (+MAX_LIST), ram_pid (+2*MAX_LIST)
 
 malloc:
-#ifdef	SAFE
-	LDAB #0				; reset index
-#endif
 	LDX #ram_pos		; MUST be the first array in memory (assume MAX_LIST << 85)
-;	STX local1			; keep in case (check conflicts!)
 	LDAA ma_rs+1		; check individual bytes, just in case, MUCH faster than TST
 	BEQ ma_nxpg			; no extra page needed
 		INC ma_rs			; otherwise increase number of pages
-		STAB ma_rs+1		; ...and just in case, clear asked bytes!
+		CLR ma_rs+1		; ...and just in case, clear asked bytes!
 ma_nxpg:
 	_CRITIC				; this is dangerous! enter critical section, new 160119
-	PSHA				; must keep this...
-	LDAA ma_rs			; get number of asked pages
+; new code will hopefully keep A
+	LDAB ma_rs			; get number of asked pages
 	BNE ma_scan			; work on specific size
 ; otherwise check for biggest available block
 ma_biggest:
 #ifdef	SAFE
-		CMPB #MAX_LIST		; already past?
+		CPX #ram_pos+MAX_LIST		; already past?
 			BEQ ma_corrupt		; something was wrong!!!
 ; *** self-healing feature for full memory assignment! ***
 ; X already points to ram_pos array
-		LDAA 1,X			; get end position
-		SUBA 0,X			; subtract current for size!
+		LDAB 1,X			; get end position
+		SUBB 0,X			; subtract current for size!
 			BCS ma_corrupt		; corruption detected!
 #endif
 ; ram_stat is just MAX_LIST bytes ahead
-		LDAA MAX_LIST,X			; get status of block
-;		CMPA #FREE_RAM		; not needed if FREE_RAM is zero! (2)
+		LDAB MAX_LIST,X			; get status of block
+;		CMPB #FREE_RAM		; not needed if FREE_RAM is zero! (2)
 		BNE ma_nxbig		; go for next as this one was not free
 			BSR ma_alsiz		; **compute size according to alignment mask**
-			CMPA ma_rs			; compare against current maximum (3)
+			CMPB ma_rs			; compare against current maximum (3)
 			BLT ma_nxbig		; this was not bigger
-				STA ma_rs			; otherwise keep track of it... (3)
+				STAB ma_rs			; otherwise keep track of it... (3)
 				STX ma_ix			; ...and its index!
 ma_nxbig:
 		INX					; advance index
-#ifdef	SAFE
-		INCB
-#endif
-;		STX local1			; update value, really needed?
-		LDAA MAX_LIST,X		; peek next status
-		CMPA #END_RAM		; check whether at end (2)
+		LDAB MAX_LIST,X		; peek next status
+		CMPB #END_RAM		; check whether at end (2)
 			BNE ma_biggest		; or continue
 ; is there at least one available block?
-		LDAA ma_rs			; should not be zero
+		LDAB ma_rs			; should not be zero
 		BNE ma_fill			; there is at least one block to allocate
-			PULA				; retrieve flags!
 			_NO_CRIT			; eeeeeeek! we are going
 			_ERR(FULL)			; otherwise no free memory!
 ; report allocated size
@@ -425,110 +416,100 @@ ma_fill:
 ma_scan:
 ; *** this is the place for the self-healing feature! ***
 #ifdef	SAFE
-		CMPB #MAX_LIST		; already past?
+		CPX #ram_pos+MAX_LIST		; already past?
 			BEQ ma_corrupt		; something was wrong!!!
 ; check UNALIGNED size for self-healing feature! worth a routine?
-;		LDX #local1		; use ram_pos array
-		LDAA 1,X		; get end position
-		SUBA 0,X		; subtract current for size!
+		LDAB 1,X		; get end position
+		SUBB 0,X		; subtract current for size!
 		BCC ma_nobad		; no corruption was seen
 ma_corrupt:
-			LDAA #>user_ram		; otherwise take beginning of user RAM...
-			LDAB #<user_ram		; LSB misaligned?
+			LDAB #>user_ram		; otherwise take beginning of user RAM...
+			TSTB #<user_ram		; LSB misaligned?
 			BEQ ma_zlsb			; nothing to align
-				INCA				; otherwise start at next page
+				INCB				; otherwise start at next page
 ma_zlsb:
+			STAB ram_pos		; create values
 			LDAB #LOCK_RAM		; ...that will become locked (new value)
-			STAA ram_pos		; create values
 			STAB ram_stat		; **should it clear the PID field too???**
-			LDAA #SRAM			; physical top of RAM...
-			LDAB #END_RAM		; ...as non-plus-ultra
+			LDAB #SRAM			; physical top of RAM...
 			STAA ram_pos+1		; create second set of values
+			LDAB #END_RAM		; ...as non-plus-ultra
 			STAB ram_stat+1
-			PULA				; retrieve flags
 			_NO_CRIT			; eeeeeeeeeek
 			_ERR(CORRUPT)		; report but do not turn system down
 ma_nobad:
 #endif
-;		LDX #local2		; use ram_stat... or just add offset???
-		LDAA MAX_LIST,X		; get state of current entry
-;		CMPA #FREE_RAM		; looking for a free one (2) not needed if free is zero
+		LDAB MAX_LIST,X		; get state of current entry
+;		CMPB #FREE_RAM		; looking for a free one (2) not needed if free is zero
 			BEQ ma_found		; got one
-		CMPA #END_RAM		; got already to the end? (2)
+		CMPB #END_RAM		; got already to the end? (2)
 			BEQ ma_nobank		; could not found anything suitable
 ma_cont:
 		INX					; increase index
-#ifdef	SAFE
-		INCB
-#endif
 		BRA ma_scan			; will exit somewhere else
 ma_nobank:
-	PULA				; retrieve flags!
 	_NO_CRIT			; non-critical when aborting!
 	_ERR(FULL)			; no room for it!
 ma_found:
 	BSR ma_alsiz		; **compute size according to alignment mask**
-	CMPA ma_rs			; compare
+	CMPB ma_rs			; compare
 		BCS ma_cont			; smaller, thus continue searching (2/3)
 ; here we go! first of all check whether aligned or not
 ma_falgn:
-	PSHA					; save current size
+	PSHB					; save current size
 ; is X pointing to current ram_pos entry???
-	LDAA 0,X		; check start address for alignment failure
-	BITA ma_align		; any offending bits?
+	LDAB 0,X		; check start address for alignment failure
+	BITB ma_align		; any offending bits?
 	BEQ ma_aok			; already aligned, nothing needed
-		ORAA ma_align		; set disturbing bits...
-		INCA				; ...and reset them after increasing the rest
-		PSHA					; need to keep the new aligned pointer!
+		ORAB ma_align		; set disturbing bits...
+		INCB				; ...and reset them after increasing the rest
+		PSHB					; need to keep the new aligned pointer!
 		BSR ma_adv			; create room for assigned block (BEFORE advancing eeeeeeeek)
 		INX					; skip the alignment blank
-		PULA					; retrieve aligned address
+		PULB					; retrieve aligned address
 ; must recompute ram_pos pointer!!! ...or preserve it on ma_adv
-		STAA 0,X		; update pointer on assigned block
+		STAB 0,X		; update pointer on assigned block
 ma_aok:
-	PULA					; retrieve size
+	PULB					; retrieve size
 ; make room for new entry... if not exactly the same size
-	CMPA ma_rs			; compare this block with requested size eeeeeeeek
+	CMPB ma_rs			; compare this block with requested size eeeeeeeek
 	BEQ ma_updt			; was same size, will not generate new entry
 ; **should I correct stack balance for safe mode?
 		BSR ma_adv			; make room otherwise, and set the following one as free padding
 ; create after the assigned block a FREE entry!
 ; must recompute pointers!!! ...or preserve them on ma_adv
 ; access to indexed ram_pos
-		LDAA 0,X		; newly assigned slice will begin there eeeeeeeeeek
-		ADDA ma_rs			; add number of assigned pages
-		STAA 1,X		; update value
-		LDAA #FREE_RAM		; let us mark it as free, PID is irrelevant!
+		LDAB 0,X		; newly assigned slice will begin there eeeeeeeeeek
+		ADDB ma_rs			; add number of assigned pages
+		STAB 1,X		; update value
+		LDAB #FREE_RAM		; let us mark it as free, PID is irrelevant!
 ; offset to access ram_stat
-		STAA MAX_LIST+1,X	; next to the assigned one
+		STAB MAX_LIST+1,X	; next to the assigned one
 ma_updt:
 	CLR ma_pt+1			; clear pointer LSB
-	LDAA 0,X		; get address of block to be assigned
-	STAA ma_pt			; note this is address of PAGE
-	LDAA #USED_RAM		; now is reserved
-	STAA MAX_LIST,X		; update ram_stat table entry
+	LDAB 0,X		; get address of block to be assigned
+	STAB ma_pt			; note this is address of PAGE
+	LDAB #USED_RAM		; now is reserved
+	STAB MAX_LIST,X		; update ram_stat table entry
 ; ** new 20161106, store PID of caller **
-	LDAA run_pid			; who asked for this? FASTER
-	STAA 2*MAX_LIST,X		; store PID in ram_pid array
+	LDAB run_pid			; who asked for this? FASTER
+	STAB 2*MAX_LIST,X		; store PID in ram_pid array
 ; theoretically we are done, end of CS
-	PULA				; retrieve flags!
 	_NO_CRIT			; end of critical section, new 160119
 	_EXIT_OK			; we're done
 
 ; **** routine for aligned-block size computation ****
-; returns found size in A, sets C if OK, error otherwise (C clear!)
-; assumes precomputed pointer in local1 (ram_pos)
+; returns found size in B, sets C if OK, error otherwise (C clear!)
 ma_alsiz:
-;	LDX local1			; computed pointer
-	LDAA 0,X			; get bottom address
-	BITA ma_align		; check for set bits from mask
+	LDAB 0,X			; get bottom address
+	BITB ma_align		; check for set bits from mask
 	BEQ ma_fit			; none was set, thus already aligned
-		ORAA ma_align		; set masked bits...
-		INCA				; ...and increase address for alignment
+		ORAB ma_align		; set masked bits...
+		INCB				; ...and increase address for alignment
 ma_fit:
-	EORA #$FF			; invert bits as will be subtracted to next entry
+	EORB #$FF			; invert bits as will be subtracted to next entry
 	SEC					; needs one more for twos-complement
-	ADCA 1,X			; compute size from top ptr MINUS bottom one
+	ADCB 1,X			; compute size from top ptr MINUS bottom one
 	RTS
 
 ; **** routine for making room for an entry ****
@@ -541,19 +522,19 @@ ma_2end:
 		BLT ma_notend		; could expand
 			PULB					; discard return address
 			PULB
-			_BRA ma_nobank		; notice error
+			BRA ma_nobank		; notice error
 ma_notend:
 #endif
-		LDAA MAX_LIST,X		; check status of block
-		CMPA #END_RAM		; scan for the end-of-memory marker
+		LDAB MAX_LIST,X		; check status of block
+		CMPB #END_RAM		; scan for the end-of-memory marker
 		BNE ma_2end			; hope will eventually finish!
 ma_room:
-		LDAA 0,X		; get block address
-		STAA 1,X		; one position forward
-		LDAA MAX_LIST,X		; get block status
-		STAA MAX_LIST+1,X	; advance it
-		LDAA 2*MAX_LIST,X	; same for PID, non-interleaved!
-		STAA 2*MAX_LIST+1,X	; advance it
+		LDAB 0,X		; get block address
+		STAB 1,X		; one position forward
+		LDAB MAX_LIST,X		; get block status
+		STAB MAX_LIST+1,X	; advance it
+		LDAB 2*MAX_LIST,X	; same for PID, non-interleaved!
+		STAB 2*MAX_LIST+1,X	; advance it
 		DEX					; down one entry
 		CPX ma_ix			; position of updated entry
 		BNE ma_room			; continue until done
@@ -615,7 +596,7 @@ fr_notafter:
 ; ** already optimized **
 fr_ok:
 	_NO_CRIT
-	_EXIT_OK
+	_EXIT_OKW
 
 ; routine for obliterating the following empty entry
 fr_join:
