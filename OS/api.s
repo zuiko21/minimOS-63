@@ -2,7 +2,7 @@
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
 ; v0.6a4
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170923-1626
+; last modified 20170924-2210
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -467,7 +467,7 @@ ma_falgn:
 		BSR ma_adv			; create room for assigned block (BEFORE advancing eeeeeeeek)
 		INX					; skip the alignment blank
 		PULB					; retrieve aligned address
-; must recompute ram_pos pointer!!! ...or preserve it on ma_adv
+; ram_pos pointer is preserved on ma_adv
 		STAB 0,X		; update pointer on assigned block
 ma_aok:
 	PULB					; retrieve size
@@ -477,7 +477,6 @@ ma_aok:
 ; **should I correct stack balance for safe mode?
 		BSR ma_adv			; make room otherwise, and set the following one as free padding
 ; create after the assigned block a FREE entry!
-; must recompute pointers!!! ...or preserve them on ma_adv
 ; access to indexed ram_pos
 		LDAB 0,X		; newly assigned slice will begin there eeeeeeeeeek
 		ADDB ma_rs			; add number of assigned pages
@@ -1400,34 +1399,32 @@ dr_shutdown:
 
 
 ; ***************************************************************
-; *** TS_INFO, get taskswitching info for multitasking driver *** 6502 6502 6502
+; *** TS_INFO, get taskswitching info for multitasking driver ***
 ; ***************************************************************
 ;		OUTPUT
-; Y			= number of bytes
+; B			= number of bytes
 ; ex_pt		= pointer to the proposed stack frame
 
 ts_info:
-	LDX #<tsi_str			; pointer to proposed stack frame
-	LDA #>tsi_str			; including MSB
-	STX ex_pt				; store LSB
-	STA ex_pt+1				; and MSB
-	LDY #tsi_end-tsi_str	; number of bytes
+	LDX #tsi_str			; pointer to proposed stack frame
+	STX ex_pt				; store it
+	LDAB #tsi_end-tsi_str	; number of bytes
 	_EXIT_OK
 
 tsi_str:
 ; pre-created reversed stack frame for firing tasks up, regardless of multitasking driver implementation
-	.word	isr_schd-1	; corrected reentry address, NEW standard label from ISR
-	.byt	1				; stored X value, best if multitasking driver is the first one EEEEEEEEEEEK not zero!
-;	.byt	0, 0, 0			; irrelevant Y, X, A values?
+	FDB	isr_schd	; corrected reentry address, NEW standard label from ISR
+	FCB	1				; stored X value, best if multitasking
+driver is the first one EEEEEEEEEEEK not zero!
 tsi_end:
 ; end of stack frame for easier size computation
 
 
 ; ***********************************************************
-; *** RELEASE, release ALL memory for a PID, new 20161115 *** 6502 6502 6502
+; *** RELEASE, release ALL memory for a PID, new 20161115 *** 6502 6502
 ; ***********************************************************
 ;		INPUT
-; Y		= PID, 0 means myself
+; B		= PID, 0 means myself
 ;		USES ma_pt and whatever takes FREE (will call it)
 
 release:
