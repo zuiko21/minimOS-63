@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel API
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
-; v0.6a4
+; v0.6a5
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170924-2210
+; last modified 20170925-1743
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -1421,39 +1421,38 @@ tsi_end:
 
 
 ; ***********************************************************
-; *** RELEASE, release ALL memory for a PID, new 20161115 *** 6502 6502
+; *** RELEASE, release ALL memory for a PID, new 20161115 ***
 ; ***********************************************************
 ;		INPUT
 ; B		= PID, 0 means myself
 ;		USES ma_pt and whatever takes FREE (will call it)
 
 release:
-	TYA					; as no CPY abs,X
+	TSTB				; check whether asking for myself
 	BNE rls_pid			; was it a valid PID?
-		LDA run_pid			; otherwise, get mine
+		LDAB run_pid			; otherwise, get mine
 rls_pid:
-	LDX #0				; reset index
+	LDX #ram_pos			; reset index for first array
 rls_loop:
-		LDY ram_stat, X		; will check stat of this block
-		CPY #USED_RAM
+		LDAA MAX_LIST,X		; will check stat of this block
+		CMPA #USED_RAM
 			BNE rls_oth			; it is not in use
-		CMP ram_pid, X		; check whether mine!
+		CMPB 2*MAX_LIST,X	; check whether mine!
 		BNE rls_oth			; it is not mine
-			PHA					; otherwise save status
-			_PHX
-			LDY ram_pos, X		; get pointer to targeted block
-			LDA ram_pos+1, X	; MSB too
-			STY ma_pt			; will be used by FREE
-			STA ma_pt+1
+			PSHB				; otherwise save status
+			STX local1		; check possible conflicts!!!
+			LDAB 0,X		; get pointer to targeted block
+			STAB ma_pt+1			; will be used by FREE
+			CLR ma_pt+1
 			_KERNEL(FREE)			; release it!
-			_PLX				; retrieve status
-			PLA
+			LDX local1			; retrieve status
+			PULB
 			BCC rls_next		; keep index IF current entry was deleted!
 rls_oth:
 		INX					; advance to next block
 rls_next:
-		LDY ram_stat, X		; look status only
-		CPY #END_RAM		; are we done?
+		LDAA MAX_LIST,X		; look status only
+		CMPA #END_RAM		; are we done?
 		BNE rls_loop		; continue if not yet
 	_EXIT_OK			; no errors...
 
