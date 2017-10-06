@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
-; v0.6a13
+; v0.6a14
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170902-1920
+; last modified 20171006-1052
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -691,7 +691,8 @@ sd_loop:
 		STX da_ptr			; local index copy (5)
 		LDX 0,X				; get pointer to header (6)
 			BEQ sd_done			; not ended (4)
-		JSR D_BYE,X			; call exit routine! cannot use da_ptr (8...)
+		LDX D_BYE,X			; eeeeeeeeeeeeeeeeeeek (5)
+		JSR 0,X				; call exit routine! cannot use da_ptr (8...)
 		LDX da_ptr			; retrieve list pointer (4)
 		INX					; advance to next entry (4+4)
 		INX

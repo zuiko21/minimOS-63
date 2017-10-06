@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel API
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
-; v0.6a5
+; v0.6a6
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170925-1743
+; last modified 20171006-1051
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -126,6 +126,7 @@ cp_lckd:
 	STAB local2			; pointer is complete... (see above)
 	LDX local2			; ...and ready to use
 #endif
+	LDX 0,X				; eeeeeeeeeeeeeeeeeeeeek
 	JSR 0,X				; call driver and return
 cio_unlock:
 	LDX local1			; lock pointer was ready to use
@@ -284,6 +285,7 @@ ci_lckdd:
 		STAB local2			; pointer is complete... (see above)
 		LDX local2			; ...and ready to use
 #endif
+		LDX 0,X				; eeeeeeeeeeeeeeeeeeeeek
 		JSR 0,X				; call driver and return
 			BCS cio_unlock		; clear MUTEX and return whatever error!
 
@@ -1064,7 +1066,8 @@ sd_loop:
 		STX da_ptr			; local index copy (5)
 		LDX 0,X				; get pointer to header (6)
 			BEQ sd_done			; not ended (4)
-		JSR D_BYE,X			; call exit routine! cannot use da_ptr (8...)
+		LDX D_BYE,X			; eeeeeeeeeeeeeeek (5)
+		JSR 0,X				; call exit routine! cannot use da_ptr (8...)
 		LDX da_ptr			; retrieve list pointer (4)
 		INX					; advance to next entry (4+4)
 		INX
@@ -1129,7 +1132,8 @@ dr_nptsk:
 				BCC dr_nabort		; did not check OK (4)
 dr_nrtsk:
 ; if arrived here, there is room for interrupt tasks, but check init code
-		JSR D_INIT,X		; like dr_icall, call D_INIT routine! (8...)
+		LDX D_INIT,X		; EEEEEEEEEEEEEEEEEEEEEEEEEEK (5)
+		JSR 0,X				; like dr_icall, call D_INIT routine! (8...)
 		BCC dr_succ			; successfull, proceed (4)
 ; init code failed otherwise, function returns UNAVAIL error code
 			JMP dr_uabort

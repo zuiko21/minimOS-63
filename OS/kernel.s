@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel
-; v0.6a14
+; v0.6a15
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170919-1430
+; last modified 20171006-1045
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -39,7 +39,7 @@ kern_head:
 	FCC		"kernel"		; filename
 	FCB		0
 kern_splash:
-	FCC		"minimOS·63 0.6a14"	; version in comment
+	FCC		"minimOS·63 0.6a15"	; version in comment
 	FCB		0
 
 	FILL	$FF, kern_head+$F8-*		; padding
@@ -248,7 +248,8 @@ dr_nptsk:
 				BCC dr_nabort		; did not check OK (4)
 dr_nrtsk:
 ; if arrived here, there is room for interrupt tasks, but check init code
-		JSR D_INIT,X		; like dr_icall, call D_INIT routine! (8...)
+		LDX D_INIT, X		; get pointer first EEEEEEEEEEEEEEEEEEK (5)
+		JSR 0,X				; like dr_icall, call D_INIT routine! (8...)
 		BCC dr_succ			; successfull, proceed (4)
 ; function returns UNAVAIL error
 			JMP dr_uabort		; did not check OK (3)
@@ -556,7 +557,7 @@ k_swi:
 ; in headerless builds, keep at least the splash string
 #ifdef	NOHEAD
 kern_splash:
-	FCC		"minimOS·63 0.6a14"
+	FCC		"minimOS·63 0.6a15"
 	FCB		0
 #endif
 
