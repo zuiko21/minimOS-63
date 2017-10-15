@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel
-; v0.6a15
+; v0.6a16
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20171006-1045
+; last modified 20171015-1921
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -39,7 +39,7 @@ kern_head:
 	FCC		"kernel"		; filename
 	FCB		0
 kern_splash:
-	FCC		"minimOS·63 0.6a15"	; version in comment
+	FCC		"minimOS·63 0.6a16"	; version in comment
 	FCB		0
 
 	FILL	$FF, kern_head+$F8-*		; padding
@@ -150,6 +150,11 @@ dr_iclear:
 	CLRA				; zero is to be stored, both arrays interleaved! (2+2)
 	CLRB
 dr_lclear:
+		BSR dr_clrio		; shared code! (8+25)
+		CPX #cio_lock+256	; all done? (3+4)
+		BNE dr_lclear
+	LDX #drv_ads		; will clear header array, if mutable (3)******
+dr_dclear:
 		BSR dr_clrio		; shared code! (8+25)
 		CPX #cio_lock+256	; all done? (3+4)
 		BNE dr_lclear
