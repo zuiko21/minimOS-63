@@ -2,7 +2,7 @@
 ; v0.6a16
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20171015-1921
+; last modified 20171015-1925
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -156,8 +156,8 @@ dr_lclear:
 	LDX #drv_ads		; will clear header array, if mutable (3)******
 dr_dclear:
 		BSR dr_clrio		; shared code! (8+25)
-		CPX #cio_lock+256	; all done? (3+4)
-		BNE dr_lclear
+		CPX #drv_ads+256	; all done? (3+4)
+		BNE dr_dclear
 
 ; *** 2) prepare access to each driver header ***
 ; first get the pointer to it
