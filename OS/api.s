@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel API
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
-; v0.6a6
+; v0.6a7
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20171006-1051
+; last modified 20171016-2229
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -1392,6 +1392,8 @@ dr_abort:
 		RTS
 dr_ended:
 ; *** *** end of standard function*** ***
+	LDAB dr_id			; get current if mutable
+	_EXIT_OK
 
 ; ******************************
 ; *** DR_SHUT, remove driver *** TBD
