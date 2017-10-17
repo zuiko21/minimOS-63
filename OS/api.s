@@ -2,7 +2,7 @@
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
 ; v0.6a7
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20171016-2229
+; last modified 20171017-1113
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -1098,6 +1098,7 @@ sd_fw:
 ;		INPUT
 ; da_ptr	= pointer to the proposed driver header
 ;		OUTPUT
+; acc. B	= actually assigned ID
 ; C			= could not install driver (ID in use or invalid, queue full, init failed)
 
 dr_install:
