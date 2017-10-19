@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel API
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
-; v0.6a7
+; v0.6a8
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20171017-1113
+; last modified 20171019-1316
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -1145,13 +1145,33 @@ dr_succ:
 
 ; *** 4) driver should be OK to install, just check whether this ID was not in use ***
 ; ++++++ new faster driver list ++++++
-		BSR dr_outptr		; get pointer to output routine (8+28)
-		CPX #dr_error		; check whether something was installed (3)
-			BNE dr_inuse		; pointer was not empty (4)
-		BSR dr_inptr		; get pointer to input routine (8+34)
-		CPX #dr_error		; check whether something was installed (3)
-			BNE dr_inuse		; already in use (4)
-		BRA dr_empty		; was empty, OK (4)
+;		BSR dr_outptr		; get pointer to output routine (8+28)
+;		CPX #dr_error		; check whether something was installed (3)
+;			BNE dr_inuse		; pointer was not empty (4)
+;		BSR dr_inptr		; get pointer to input routine (8+34)
+;		CPX #dr_error		; check whether something was installed (3)
+;			BNE dr_inuse		; already in use (4)
+;		BRA dr_empty		; was empty, OK (4)
+; ****** new, much faster approach, mutable-ID savvy ******
+		LDAB dr_id			; *take original ID... or preset parameter! (3)
+		ASLB				; *times two, as is index to pointers (2)
+#ifdef	MC6801
+; MCUs simply add B to X
+		LDX #drv_ads		; get base pointer (3)
+		ABX					; *add entry offset and we are done! (3)
+		STX pfa_ptr			; temporary storage
+#else
+; compute using local, then load into X
+		ADDB #<drv_ads		; add to LSB (2)
+		STAB pfa_ptr+1		; *** is this already used??? *** (4)
+		LDAB #>drv_ads		; now for MSB (2)
+dr_iopx:
+		ADCB #0				; propagate carry (2+4)
+		STAB pfa_ptr
+;		LDX pfa_ptr			; get final pointer (4+5)
+#endif
+		LDAB pfa_ptr		; check MSB only
+		BEQ dr_empty		; if it is clear, is OK to install
 dr_inuse:
 ; already in use, function returns BUSY error or something...
 			JMP dr_babort		; ID already in use
