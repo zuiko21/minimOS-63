@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel
-; v0.6a16
+; v0.6a17
 ; MASM compliant 20170614
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20171015-1925
+; last modified 20171023-1000
 
 ; avoid standalone definitions
 #define		KERNEL	_KERNEL
@@ -39,7 +39,7 @@ kern_head:
 	FCC		"kernel"		; filename
 	FCB		0
 kern_splash:
-	FCC		"minimOS·63 0.6a16"	; version in comment
+	FCC		"minimOS·63 0.6a17"	; version in comment
 	FCB		0
 
 	FILL	$FF, kern_head+$F8-*		; padding
@@ -153,11 +153,14 @@ dr_lclear:
 		BSR dr_clrio		; shared code! (8+25)
 		CPX #cio_lock+256	; all done? (3+4)
 		BNE dr_lclear
-	LDX #drv_ads		; will clear header array, if mutable (3)******
+
+#ifdef	MUTABLE
+	LDX #drv_ads		; will clear header array, if mutable (3)
 dr_dclear:
 		BSR dr_clrio		; shared code! (8+25)
 		CPX #drv_ads+256	; all done? (3+4)
 		BNE dr_dclear
+#endif
 
 ; *** 2) prepare access to each driver header ***
 ; first get the pointer to it
@@ -562,7 +565,7 @@ k_swi:
 ; in headerless builds, keep at least the splash string
 #ifdef	NOHEAD
 kern_splash:
-	FCC		"minimOS·63 0.6a15"
+	FCC		"minimOS·63 0.6a17"
 	FCB		0
 #endif
 

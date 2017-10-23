@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel API
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
-; v0.6a8
+; v0.6a9
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20171019-1316
+; last modified 20171023-0958
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -1144,14 +1144,14 @@ dr_nabort:
 dr_succ:
 
 ; *** 4) driver should be OK to install, just check whether this ID was not in use ***
+#ifndef		MUTABLE
 ; ++++++ new faster driver list ++++++
-;		BSR dr_outptr		; get pointer to output routine (8+28)
-;		CPX #dr_error		; check whether something was installed (3)
-;			BNE dr_inuse		; pointer was not empty (4)
-;		BSR dr_inptr		; get pointer to input routine (8+34)
-;		CPX #dr_error		; check whether something was installed (3)
-;			BNE dr_inuse		; already in use (4)
-;		BRA dr_empty		; was empty, OK (4)
+		BSR dr_outptr		; get pointer to output routine (8+28)
+		CPX #dr_error		; check whether something was installed (3)
+			BNE dr_inuse		; pointer was not empty (4)
+		BSR dr_inptr		; get pointer to input routine (8+34)
+		CPX #dr_error		; check whether something was installed (3)
+#else
 ; ****** new, much faster approach, mutable-ID savvy ******
 		LDAB dr_id			; *take original ID... or preset parameter! (3)
 		ASLB				; *times two, as is index to pointers (2)
@@ -1171,7 +1171,8 @@ dr_iopx:
 ;		LDX pfa_ptr			; get final pointer (4+5)
 #endif
 		LDAB pfa_ptr		; check MSB only
-		BEQ dr_empty		; if it is clear, is OK to install
+#endif
+		BEQ dr_empty		; if it is clear, is OK to install (4)
 dr_inuse:
 ; already in use, function returns BUSY error or something...
 			JMP dr_babort		; ID already in use

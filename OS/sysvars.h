@@ -1,6 +1,6 @@
-; minimOS·63 0.6a6 System Variables
+; minimOS·63 0.6a7 System Variables
 ; (c) 2012-2017 Carlos J. Santisteban
-; last modified 20171012-1856
+; last modified 20171023-1001
 ; shorter names 20170808
 
 ; **** I/O management ****
@@ -8,11 +8,13 @@
 #ifndef	LOWRAM
 drv_opt		RMB 256				; full page of output driver pointers, new direct scheme 160406
 drv_ipt		RMB 256				; full page of input driver pointers, new direct scheme 160406
+#ifdef		MUTABLE
 ; mutable IDs array
 dev_ads		RMB 256				; new header adresses array
+#endif
 #else
 drv_num		FCB 0				; number of installed drivers
-id_list		RMB MX_DRVRS			; space for reasonable number of drivers
+id_list		RMB MX_DRVRS			; space for reasonable number of drivers****** this WILL change
 #endif
 
 ; ** I/O flags and locks **
