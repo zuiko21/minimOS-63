@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
-; v0.6a14
+; v0.6a15
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20171006-1052
+; last modified 20171030-0959
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -21,10 +21,10 @@ ts_info:
 set_curr:
 
 ; *** FUTURE IMPLEMENTATION ***
-aqmanage:
-pqmanage:
-dr_install:
-dr_shutdown:
+aq_mng:
+pq_mng:
+dr_inst:
+dr_shut:
 
 	_ERR(UNAVAIL)		; go away!
 
@@ -45,9 +45,9 @@ cout:
 	STX bl_siz
 ; ...and fall into BOUT
 
-; **************************
-; *** BOUT, block output ***
-; **************************
+; ***************************
+; *** BLOUT, block output ***
+; ***************************
 ;		INPUT
 ; acc B		= dev
 ; bl_ptr	= pointer to block
@@ -290,7 +290,7 @@ ow_no_window:
 get_pid:
 b_fork:
 	LDAB #0				; no multitasking, system reserved PID (2)
-yield:
+b_yield:
 close_w:
 free_w:
 	_EXIT_OK			; all done (7)
@@ -368,7 +368,7 @@ rst_shell:
 ; b_sig	= signal to be sent
 ; acc B	= PID (0 means TO ALL)
 
-signal:
+b_signal:
 #ifdef	SAFE
 	TSTB				; check correct PID, really needed? (2)
 		BNE sig_pid			; strange error? (4)
@@ -387,16 +387,16 @@ sig_pid:
 	_ERR(INVALID)		; unrecognised signal (9)
 
 
-; ************************************************
-; *** B_STATUS, get execution flags of a braid ***
-; ************************************************
+; ***********************************************
+; *** B_FLAGS, get execution flags of a braid ***
+; ***********************************************
 ;		INPUT
 ; acc B	= addressed braid
 ;		OUTPUT
 ; acc B	= flags ***TBD
 ; C		= invalid PID
 
-status:
+b_flags:
 #ifdef	SAFE
 	TSTB				; check PID (2)
 		BNE sig_pid			; only 0 accepted (4)
@@ -416,7 +416,7 @@ sig_exit:
 ;		OUTPUT
 ; C		= bad PID
 
-set_handler:
+set_hndl:
 #ifdef	SAFE
 	TSTB				; check PID (2)
 		BNE sig_pid			; only 0 accepted (4)
@@ -436,7 +436,7 @@ set_handler:
 ;		USES rh_scan (modifies it!) AND loc_str (new 20170606)
 ; might change API somehow...
 
-load_link:
+loadlink:
 ; *** look for that filename in ROM headers ***
 ; get initial scanning address as local variable
 	LDX #ROM_BASE		; begin of ROM contents (3)
@@ -568,7 +568,7 @@ str_end:
 ; ln_siz	= max offset (byte)
 ;		USES rl_dev, rl_cur, loc_str and whatever CIN takes
 
-readLN:
+readln:
 	STAB rl_dev			; preset device ID! (4)
 	LDX str_pt			; destination buffer... (4)
 	STX loc_str			; ...set local copy (5)
@@ -734,12 +734,12 @@ k_vec:
 	JMP	cout			; output a character
 	JMP	cin				; get a character
 	JMP	string			; prints a C-string
-	JMP	readLN			; buffered input
+	JMP	readln			; buffered input
 ; block-oriented I/O
 	JMP	blout			; standard block output
 	JMP	blin			; standard block input
-	JMP	dev_config		; device configuration
-	JMP	dev_status		; device status
+	JMP	bl_cnfg			; device configuration
+	JMP	bl_stat			; device status
 ; simple windowing system (placeholders)
 	JMP	open_w			; get I/O port or window
 	JMP	close_w			; close window
@@ -748,22 +748,22 @@ k_vec:
 	JMP	uptime			; approximate uptime in ticks
 	JMP	set_fg			; enable frequency generator (VIA T1@PB7)
 	JMP	shutdown		; proper shutdown procedure
-	JMP	load_link		; get address once in RAM/ROM
+	JMP	loadlink		; get address once in RAM/ROM
 ; simplified task management
 	JMP	b_fork			; get available PID ***returns 0
 	JMP	b_exec			; launch new process ***simpler
-	JMP	signal			; send UNIX-like signal to a braid ***SIGTERM & SIGKILL only
-	JMP	status			; get execution flags of a task ***eeeeeeeeeek
+	JMP	b_signal		; send UNIX-like signal to a braid ***SIGTERM & SIGKILL only
+	JMP	b_flags			; get execution flags of a task ***eeeeeeeeeek
 	JMP	get_pid			; get PID of current braid ***returns 0
-	JMP	set_handler		; set SIGTERM handler
-	JMP	yield			; give away CPU time for I/O-bound process ***does nothing
+	JMP	set_hndl		; set SIGTERM handler
+	JMP	b_yield			; give away CPU time for I/O-bound process ***does nothing
 ; new functionalities TBD
-	JMP	aqmanage		; manage asynchronous task queue
-	JMP	pqmanage		; manage periodic task queue
+	JMP	aq_mng			; manage asynchronous task queue
+	JMP	pq_mng			; manage periodic task queue
 ; *** unimplemented functions in LOWRAM systems ***
 #ifdef	SAFE
-	JMP	dr_install		; install driver
-	JMP	dr_shutdown		; shutdown driver
+	JMP	dr_inst			; install driver
+	JMP	dr_shut			; shutdown driver
 	JMP	malloc			; reserve memory
 	JMP	memlock			; reserve some address
 	JMP	free			; release memory

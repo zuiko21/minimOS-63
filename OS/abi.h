@@ -1,7 +1,7 @@
-; minimOS·63 0.6a7 API/ABI
+; minimOS·63 0.6a8 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20170830-1732
+; last modified 20171030-1006
 ; MASM compliant 20170614, 8-char max names 20170805
 
 ; *************************************************
@@ -17,13 +17,13 @@ STRING		EQU	CIN+3		; output a C-string
 READLN		EQU	STRING+3	; read input into supplied buffer
 
 ; new block I/O
-BOUT		EQU	READLN+3	; block output
-BLIN		EQU	BOUT+3		; block input
-B_CNFG		EQU	BLIN+3		; device configuration
-B_STAT		EQU	B_CNFG+3	; device status
+BLOUT		EQU	READLN+3	; block output
+BLIN		EQU	BLOUT+3		; block input
+BL_CNFG		EQU	BLIN+3		; device configuration
+BL_STAT		EQU	BL_CNFG+3	; device status
 
 ; basic windowing system
-OPEN_W		EQU	B_STAT+3	; open window or get I/O devices
+OPEN_W		EQU	BL_STAT+3	; open window or get I/O devices
 CLOSE_W		EQU	OPEN_W+3	; close a window or release device and its buffer
 FREE_W		EQU	CLOSE_W+3	; release a window but let it on screen, keeping its buffer, may be closed by kernel
 
@@ -37,8 +37,8 @@ LOADLINK	EQU	SHUTDOWN+3	; get an executable from its path, and get it loaded int
 B_FORK		EQU	LOADLINK+3	; reserve a free braid
 B_EXEC		EQU	B_FORK+3	; get code at some address running into a previously reserved braid
 B_SIGNAL	EQU	B_EXEC+3	; send UNIX_like signal to a braid
-B_STATUS	EQU	B_SIGNAL+3	; get execution flags of a braid
-GET_PID		EQU	B_STATUS+3	; get current braid PID
+B_FLAGS		EQU	B_SIGNAL+3	; get execution flags of a braid
+GET_PID		EQU	B_FLAGS+3	; get current braid PID
 SET_HNDL	EQU	GET_PID+3	; set SIGTERM handler
 B_YIELD		EQU	SET_HNDL+3	; give away CPU time, not really needed but interesting anyway
 

@@ -1,6 +1,6 @@
-; minimOS·63 0.6a7 System Variables
+; minimOS·63 0.6a8 System Variables
 ; (c) 2012-2017 Carlos J. Santisteban
-; last modified 20171023-1001
+; last modified 20171030-0954
 ; shorter names 20170808
 
 ; **** I/O management ****
@@ -54,12 +54,12 @@ ticks		RMB	4		; jiffy IRQs, newest format 170822
 sd_flag		RMB	1		; default task upon no remaining braids! 160408
 #ifndef	LOWRAM
 dflt_in		RMB	1		; GLOBAL default devices, EXCEPT for LOWRAM systems
-dflt_out	RMB	1
+dfltout		RMB	1
 ; no way for multitasking in LOWRAM systems
 run_pid		FCB	0		; current PID running for easy kernel access, will be set by new SET_CURR
 #else
 dflt_in		EQU std_in	; in LOWRAM systems, both global and local standard devices are the same!
-dflt_out	EQU stdout
+dfltout		EQU stdout
 #endif
 old_t1		RMB	2		; *** keep old T1 latch value for FG, revised 150208 *** might be revised or moved to firmware vars!
 
