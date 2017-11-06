@@ -2,7 +2,7 @@
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
 ; v0.6a10
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20171030-1005
+; last modified 20171106-1009
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -1059,7 +1059,7 @@ sd_2nd:
 ; now let's disable all drivers
 	SEI					; disable interrupts (2)
 ; call each driver's shutdown routine
-	LDX drivers_ad		; preset index (5)
+	LDX drvrs_ad		; preset index (5)
 ; first get the pointer to each driver table
 sd_loop:
 ; get address index
