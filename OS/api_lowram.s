@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
-; v0.6a15
+; v0.6a16
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20171030-0959
+; last modified 20171220-1437
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -754,10 +754,10 @@ k_vec:
 	JMP	b_exec			; launch new process ***simpler
 	JMP	b_signal		; send UNIX-like signal to a braid ***SIGTERM & SIGKILL only
 	JMP	b_flags			; get execution flags of a task ***eeeeeeeeeek
-	JMP	get_pid			; get PID of current braid ***returns 0
 	JMP	set_hndl		; set SIGTERM handler
 	JMP	b_yield			; give away CPU time for I/O-bound process ***does nothing
-; new functionalities TBD
+;	JMP	get_pid			; get PID of current braid ***returns 0
+ new functionalities TBD
 	JMP	aq_mng			; manage asynchronous task queue
 	JMP	pq_mng			; manage periodic task queue
 ; *** unimplemented functions in LOWRAM systems ***

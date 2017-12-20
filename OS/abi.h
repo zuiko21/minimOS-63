@@ -1,7 +1,7 @@
-; minimOS·63 0.6a8 API/ABI
+; minimOS·63 0.6a9 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20171030-1006
+; last modified 20171220-1437
 ; MASM compliant 20170614, 8-char max names 20170805
 
 ; *************************************************
@@ -38,12 +38,12 @@ B_FORK		EQU	LOADLINK+3	; reserve a free braid
 B_EXEC		EQU	B_FORK+3	; get code at some address running into a previously reserved braid
 B_SIGNAL	EQU	B_EXEC+3	; send UNIX_like signal to a braid
 B_FLAGS		EQU	B_SIGNAL+3	; get execution flags of a braid
-GET_PID		EQU	B_FLAGS+3	; get current braid PID
-SET_HNDL	EQU	GET_PID+3	; set SIGTERM handler
+SET_HNDL	EQU	B_FLAGS+3	; set SIGTERM handler
 B_YIELD		EQU	SET_HNDL+3	; give away CPU time, not really needed but interesting anyway
+GET_PID		EQU	B_YIELD+3	; get current braid PID
 
 ; some new driver functionalities, perhaps OK with LOWRAM systems
-AQ_MNG		EQU	B_YIELD+3	; get asyncronous task status, or enable/disable it!
+AQ_MNG		EQU	GET_PID+3	; get asyncronous task status, or enable/disable it!
 PQ_MNG		EQU	AQ_MNG+3	; get periodic task status, enable/disable it or set frequency!
 
 ; not for LOWRAM systems
