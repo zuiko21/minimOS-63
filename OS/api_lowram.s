@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
-; v0.6a16
+; v0.6a17
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20171220-1437
+; last modified 20171225-2207
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -21,6 +21,7 @@ ts_info:
 set_curr:
 
 ; *** FUTURE IMPLEMENTATION ***
+sysinit:
 aq_mng:
 pq_mng:
 dr_inst:
@@ -730,6 +731,8 @@ sd_fw:
 ;-fw_table:				; 128-byte systems' firmware get unpatchable table from here, new 20150318
 ; 6800 LOWRAM systems may just update the kern_ptr variable, without a firmware-owned table
 k_vec:
+; system initialisation
+	JMP sysinit			; reset all kernel data ***NEW
 ; basic I/O
 	JMP	cout			; output a character
 	JMP	cin				; get a character
