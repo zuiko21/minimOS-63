@@ -1,7 +1,7 @@
 ; minimOS·63 0.6a10 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20171225-2205
+; last modified 20171230-2300
 ; MASM compliant 20170614, 8-char max names 20170805
 
 ; *************************************************
@@ -10,10 +10,10 @@
 ; *************************************************
 ; *************************************************
 
-; system initialisation
-SYSINIT		EQU	0			; reset all kernel data
+; no longer room for system initialisation
+
 ; basic I/O
-COUT		EQU	SYSINIT+3	; character output
+COUT		EQU	0			; character output
 CIN			EQU	COUT+3		; character input
 STRING		EQU	CIN+3		; output a C-string
 READLN		EQU	STRING+3	; read input into supplied buffer

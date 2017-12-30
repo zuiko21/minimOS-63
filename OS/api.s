@@ -2,7 +2,7 @@
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
 ; v0.6a12
 ; (c) 2017 Carlos J. Santisteban
-; last modified 20171225-2206
+; last modified 20171230-2301
 ; MASM compliant 20170614
 
 ; *** dummy function, non implemented ***
@@ -18,7 +18,6 @@ set_curr:
 
 ; *** FUTURE IMPLEMENTATION ***
 
-sysinit:
 aq_mng:
 pq_mng:
 dr_shut:
@@ -1505,8 +1504,7 @@ set_curr:
 ;-fw_table:				; 128-byte systems' firmware get unpatchable table from here, new 20150318
 ; 6800 LOWRAM systems may just update the kern_ptr variable, without a firmware-owned table
 k_vec:
-; system initialisation
-	JMP sysinit			; reset all kernel data ***NEW
+; no longer room for system initialisation
 ; basic I/O
 	JMP	cout			; output a character
 	JMP	cin				; get a character
