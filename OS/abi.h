@@ -1,7 +1,7 @@
-; minimOS·63 0.6a10 API/ABI
+; minimOS·63 0.6a11 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
-; (c) 2017 Carlos J. Santisteban
-; last modified 20171230-2300
+; (c) 2017-2018 Carlos J. Santisteban
+; last modified 20180108-1337
 ; MASM compliant 20170614, 8-char max names 20170805
 
 ; *************************************************
@@ -52,13 +52,14 @@ PQ_MNG		EQU	AQ_MNG+3	; get periodic task status, enable/disable it or set freque
 ; drivers...
 DR_INST		EQU	PQ_MNG+3	; install and enable driver
 DR_SHUT		EQU	DR_INST+3	; shut down driver
+DR_INFO		EQU DR_SHUT+3	; get driver header, new
 ; memory...
 MALLOC		EQU	DR_SHUT+3	; allocate memory
-MEMLOCK		EQU	MALLOC+3	; allocate memory at a certain address, new 20170524
-FREE		EQU	MEMLOCK+3	; release memory block
+FREE		EQU	MALLOC+3	; release memory block
 RELEASE		EQU	FREE+3		; release ALL memory blocks belonging to some PID, new 20161115
+MEMLOCK		EQU	RELEASE+3	; allocate memory at a certain address, new 20170524
 ; multitasking...
-TS_INFO		EQU	RELEASE+3	; get taskswitching info for multitasking driver
+TS_INFO		EQU	MEMLOCK+3	; get taskswitching info for multitasking driver
 SET_CURR	EQU	TS_INFO+3	; set internal kernel info for running task (PID & architecture) new 20170222
 
 
