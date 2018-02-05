@@ -1,8 +1,8 @@
 ; firmware for minimOS·63
 ; sort-of generic template, but intended for KERAton
-; v0.6a13
-; (c)2017 Carlos J. Santisteban
-; last modified 20170829-2311
+; v0.6a14
+; (c)2017-2018 Carlos J. Santisteban
+; last modified 20180205-1005
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -24,7 +24,7 @@ fw_start:
 	FCC		"boot"				; mandatory filename for firmware
 	FCB		0
 fw_splash:
-	FCC		"0.6a13 firmware for "	; version in comment
+	FCC		"0.6a14 firmware for "	; version in comment
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB		0
@@ -40,6 +40,13 @@ fw_mname:
 	FDB		$10000-fw_start-256	; firmware size excluding header 
 	FDB		0					; 64K space does not use upper 16-bit
 ; *** end of standard header ***
+#else
+; if case of no headers, at least keep machine name somewhere
+fw_splash:
+	FCC		"0.6a14 firmware for "
+fw_mname:
+	FCC		MACHINE_NAME
+	FCB 	0
 #endif
 
 ; **************************
@@ -82,9 +89,9 @@ post:
 ; as NMI will be validated, no need to preinstall it!
 
 ; *** reset jiffy count ***
-	LDX #0			; not worth a loop
-	STX ticks		; reset word
-	STX ticks+2		; next
+	LDX #0				; not worth a loop
+	STX ticks			; reset word
+	STX ticks+2			; next
 
 ; ********************************
 ; *** hardware interrupt setup ***
@@ -180,8 +187,8 @@ nmi_end:
 
 ; *** execute standard NMI handler, if magic string failed ***
 rst_nmi:
-	BSR std_nmi		; call standard routine
-	BRA nmi_end		; and finish, much simpler
+	BSR std_nmi			; call standard routine
+	BRA nmi_end			; and finish, much simpler
 
 ; *** default code for NMI handler, if not installed or invalid, should end in RTS ***
 std_nmi:
@@ -226,7 +233,7 @@ fw_gestalt:
 fw_s_isr:
 ; no CS as STX is atomic!
 	LDX kerntab			; get pointer
-	BEQ fw_r_isr			; in case of read...
+	BEQ fw_r_isr		; in case of read...
 		STX fw_isr			; ...or store for firmware
 		_DR_OK				; done
 fw_r_isr:
@@ -246,7 +253,7 @@ fw_r_isr:
 
 fw_s_nmi:
 	LDX kerntab			; get pointer to supplied code + magic string
-		BEQ fw_r_nmi			; in case of read...
+		BEQ fw_r_nmi		; in case of read...
 #ifdef	SAFE
 	LDAA 0,X			; first char
 	CMPA #'U'			; is it correct?
@@ -281,7 +288,7 @@ fw_r_nmi:
 
 fw_s_brk:
 	LDX kerntab			; get pointer
-	BEQ fw_r_brk			; in case of read...
+	BEQ fw_r_brk		; in case of read...
 		STX fw_brk			; store for firmware
 		_DR_OK				; done
 fw_r_brk:
@@ -305,7 +312,7 @@ fw_jiffy:
 fj_end:
 ; reload in case of successful change
 ; supress in case of fixed IRQ (KERAton)
-		LDX irq_hz		; get requested
+		LDX irq_hz			; get requested
 		STX irq_freq		; set, will not harm
 		_DR_OK
 fj_set:
@@ -317,23 +324,23 @@ fj_set:
 ; first JxL, no shift
 	LDAA irq_hz+1		; J
 	LDAB #<SPD_CODE		; L
-	MUL			; JxL
+	MUL					; JxL
 ; as the result LSB is to be discarded, just keep the high part!
-	STAA local1		; JL.high
+	STAA local1			; JL.high
 ; now IxL, shift one byte
-	LDAA irq_hz		; I
+	LDAA irq_hz			; I
 	LDAB #<SPD_CODE		; L again
-	MUL			; IxL
+	MUL					; IxL
 	STD local1+2		; IL, will shift 1
 ; now JxK, shift one too
 	LDAA irq_hz+1		; J
 	LDAB #>SPD_CODE		; K now
-	MUL			; JxK
-	STD local2		; JK, will shift 1 too
+	MUL					; JxK
+	STD local2			; JK, will shift 1 too
 ; finally IxK will be shifted two bytes!
-	LDAA irq_hz		; I
+	LDAA irq_hz			; I
 	LDAB #>SPD_CODE		; K again
-	MUL			; IxK
+	MUL					; IxK
 	STD local2+2		; IK, will shift 2 bytes
 ; now add things, up to three bytes!
 ;  ••JL
@@ -342,39 +349,39 @@ fj_set:
 ; +IK••
 ;  123x
 	LDD local1+2		; full 'IL' on second line
-	ADDB local1		; first add 'J' on first product
+	ADDB local1			; first add 'J' on first product
 	ADCB local2+1		; add with carry 'K' on 3rd line
 ; accumulator B is ready
 	ADCA local2 		; for mid byte add 'J' on 3rd line
 	ADCA local2+3 		; and 'K' on 4th line
 	STD local3+1		; lowest 16-bit ready!
-	CLRB			; for first byte...
+	CLRB				; for first byte...
 	ADCB local2+2		; ...add 'I' from 4th line
-	STAB local3		; full result is ready!!!
+	STAB local3			; full result is ready!!!
 #else
 ; do russian-style multiply!
-	LDX irq_hz		; get 1st factor
+	LDX irq_hz			; get 1st factor
 	STX local1+2		; store local copy...
 	LDX #0
-	STX local1		; ...with room to be shifted left
-	STX local3		; clear result too
+	STX local1			; ...with room to be shifted left
+	STX local3			; clear result too
 	STX local3+2
 	LDX #SPD_CODE		; second factor
-	STX local2		; will be shifted right
+	STX local2			; will be shifted right
 fj_mul:
-		LSR local2		; extract lsb
+		LSR local2			; extract lsb
 		ROR local2+1
-		BCC fj_next		; was clear, do not add
+		BCC fj_next			; was clear, do not add
 ; add current 1st factor to result, with loop takes 16b/111t
-			LDAA #4			; otherwise set loop (2)
+			LDAA #4				; otherwise set loop (2)
 			LDX #local1+3		; set pointer to LSB (3)
-			CLC			; loop does not tell ADD from ADC (2)
+			CLC					; loop does not tell ADD from ADC (2)
 fj_add:
-				LDAB 0,X		; get 1st (5)
-				ADCB 8,X		; add result (5)
-				STAB 8,X		; update (6)
-				DEX			; point to previous byte (4)
-				DECA			; one less (2+4)
+				LDAB 0,X			; get 1st (5)
+				ADCB 8,X			; add result (5)
+				STAB 8,X			; update (6)
+				DEX					; point to previous byte (4)
+				DECA				; one less (2+4)
 				BNE fj_add
 ; loopless alternative, takes 24b/40t
 ;			LDAA local1+3		; get 1st LSB (3)
@@ -388,57 +395,57 @@ fj_add:
 ;			STAA local3+1
 ;			LDAA local1
 ;			ADCA local3
-;			STAA local3		; done
+;			STAA local3			; done
 fj_next:
 		ASL local1+3		; shift 1st factor left
 		ROL local1+2
 		ROL local1+1
 		ROL local1
 ; check remaining bits on 2nd factor
-		LDX local2		; full 16-bit check
-		BNE fj_mul		; continue until done
+		LDX local2			; full 16-bit check
+		BNE fj_mul			; continue until done
 #endif
 ; time to shift 4 bits to the right
 #ifdef	MC6801
 ; MCU is 14b/71t
-	LDX #4			; preset counter (3)
-	LDD local3		; put highest in D (4)
+	LDX #4				; preset counter (3)
+	LDD local3			; put highest in D (4)
 fj_shft:
-		LSRD			; shift 2 bytes... (3)
+		LSRD				; shift 2 bytes... (3)
 		ROR local3+2		; ...plus last (6)
 		DEX
-		BNE fj_shft		; until done (3+3)
-	STD local3		; update full value (4)
+		BNE fj_shft			; until done (3+3)
+	STD local3			; update full value (4)
 #else
 ; classic 6800 is 14b/98t
-;	LDAB #4			; preset counter (2)
+;	LDAB #4				; preset counter (2)
 ;fj_shft:
-;		LSR local3		; shift first... (6)
+;		LSR local3			; shift first... (6)
 ;		ROR local3+1		; ...into 2nd... (6)
 ;		ROR local3+2		; ...plus last (6)
 ;		DECB
-;		BNE fj_shft		; until done (2+4)
+;		BNE fj_shft			; until done (2+4)
 ; alternative 6800 is 16b/88t
-	LDAB #4			; preset counter (2)
-	LDAA local3		; put MSB in A (3)
+	LDAB #4				; preset counter (2)
+	LDAA local3			; put MSB in A (3)
 fj_shft:
-		LSRA			; shift 1st byte... (2)
+		LSRA				; shift 1st byte... (2)
 		ROR local3+1		; ...plus 2nd... (6)
 		ROR local3+2		; ...and last (6)
 		DECB
-		BNE fj_shft		; until done (2+4)
-	STAA local3		; must update, unfortunately (3)
+		BNE fj_shft			; until done (2+4)
+	STAA local3			; must update, unfortunately (3)
 ; another 6800 is 19b/87t
-;	LDX #4			; preset counter (3)
-;	LDAA local3		; put MSB in A (3)
+;	LDX #4				; preset counter (3)
+;	LDAA local3			; put MSB in A (3)
 ;	LDAB local3+1		; middle byte in B (3)
 ;fj_shft:
-;		LSRA			; shift 1st byte... (2)
-;		LSRB			; ...plus 2nd... (2)
+;		LSRA				; shift 1st byte... (2)
+;		LSRB				; ...plus 2nd... (2)
 ;		ROR local3+2		; ...and last (6)
 ;		DEX
-;		BNE fj_shft		; until done (4+4)
-;	STAA local3		; must update, unfortunately (3+3)
+;		BNE fj_shft			; until done (4+4)
+;	STAA local3			; must update, unfortunately (3+3)
 ;	STAB local3+1
 #endif
 ; if carry is set, must add 1 before subtracting 2
@@ -449,15 +456,15 @@ fj_shft:
 	LDAA local3+1		; get full value
 	LDAB local3+2
 #endif
-	BCS fj_rnd		; C was set, subtract 1 only
-		SUBB #2			; otherwise round low
-		BRA fj_msb		; and go for next byte
+	BCS fj_rnd			; C was set, subtract 1 only
+		SUBB #2				; otherwise round low
+		BRA fj_msb			; and go for next byte
 fj_rnd:
-	SUBB #1			; round up
+	SUBB #1				; round up
 fj_msb:
-	SBCA #0			; propagate borrow
-	BCC fj_nbor		; no more to check
-		DEC local3		; rare but possible
+	SBCA #0				; propagate borrow
+	BCC fj_nbor			; no more to check
+		DEC local3			; rare but possible
 fj_nbor:
 #ifdef	MC6801
 	STD local3+1		; update full value
@@ -466,8 +473,8 @@ fj_nbor:
 	STAB local3+2
 #endif
 ; finally check whether fits range
-	LDAA local3		; check MSB, must be zero
-	BNE fj_over		; no, out of range
+	LDAA local3			; check MSB, must be zero
+	BNE fj_over			; no, out of range
 ; otherwise get computed value...
 #ifdef	MC6801
 		LDD local3+1		; get result, big-endian
@@ -478,7 +485,7 @@ fj_nbor:
 ; ...and set it into counters, converting endianness!
 		STAB VIA_J+T1CL		; VIA is little-endian!
 		STAA VIA_J+T1CH		; start counting
-		BRA fj_end		; success
+		BRA fj_end			; success
 fj_over:
 	_DR_ERR(INVALID)
 
@@ -508,7 +515,7 @@ fwp_exit:
 fwp_ns:
 	CMPB #PW_WARM		; warm?
 	BNE fwp_nw			; not
-		JMP start_kernel		; warm boot!
+		JMP start_kernel	; warm boot!
 fwp_nw:
 	CMPB #PW_COLD		; cold?
 	BNE fwp_nc			; not
@@ -520,7 +527,7 @@ fwp_nc:
 fwp_nhi:
 	CMPB #PW_SOFT		; SWI? Not sure if really needed...
 	BNE fwp_nsi			; not
-		JMP brk_hndl			; SWI!
+		JMP brk_hndl		; SWI!
 fwp_nsi:
 	CMPB #PW_OFF		; off?
 	BNE fwp_exit		; not recognised
@@ -573,7 +580,7 @@ fwi_loop:
 ; acc B <- function to be patched
 
 fw_patch:
-	_CRITIC			; disable interrupts, respects A
+	_CRITIC				; disable interrupts, respects A
 #ifdef	MC6801
 	PSHA				; eeeek
 	LDX #fw_table		; take base address
@@ -596,12 +603,6 @@ fw_patch:
 	_NO_CRIT			; restore interrupts
 	_DR_OK				; done
 
-
-; CONTEXT, zeropage & stack bankswitching
-; *** TO BE DONE ****** TO BE DONE ***
-fw_ctx:
-	_DR_ERR(UNAVAIL)	; not yet implemented
-
 #else
 ; these functions will not work on 128-byte systems!
 fw_install:
@@ -614,7 +615,6 @@ fw_install:
 #endif
 
 fw_patch:
-fw_ctx:
 	_DR_ERR(UNAVAIL)	; not available
 
 #endif
@@ -624,23 +624,23 @@ fw_ctx:
 
 led_lock:
 ; make sure port B is ready to access keyboard
-	LDAA PIA+CRB			; port B control register
+	LDAA PIA+CRB		; port B control register
 	ANDA #251			; clear DDR access
-	STAA PIA+CRB			; DDRB mode
-	LDAB PIA+PRB			; previous direction
+	STAA PIA+CRB		; DDRB mode
+	LDAB PIA+PRB		; previous direction
 	ORAB #$F9			; these bits as output, at least
 	STAB PIA+PRB
 	EORA #4				; toggle DDR access
-	STAA PIA+CRB			; now it is data register B
+	STAA PIA+CRB		; now it is data register B
 	LDAB #$B8			; initial value (LED on, LCD disabled)
-	STAB PIA+PRB			; all set
+	STAB PIA+PRB		; all set
 ; now a loop for LED blinking, toggling PB3
 ll_loop:
 ; no need to preset regs as full range of X gives ~0.56s @ 921 kHz
-			INX				; count (4)
+			INX					; count (4)
 			BNE ll_loop			; until expired (4)
 		EORB #8				; toggle PB3
-		STAB PIA+PRB			; set new value to LED
+		STAB PIA+PRB		; set new value to LED
 		BRA ll_loop			; continue forever
 
 ; ****************************
@@ -653,14 +653,6 @@ ll_loop:
 fw_map:
 	FCB		0
 
-; if case of no headers, at least keep machine name somewhere
-#ifdef	NOHEAD
-fw_splash:
-	FCC		"0.6a13 firmware for "
-fw_mname:
-	FCC		MACHINE_NAME
-	FCB 	0
-#endif
 
 ; *********************************
 ; *** administrative JUMP table ***
@@ -684,7 +676,6 @@ fw_mname:
 #ifndef	LOWRAM
 ; not for LOWRAM systems
 	JMP fw_patch		; PATCH patch single function (renumbered) +1B
-	JMP fw_ctx			; *** CONTEXT context bankswitching +1E
 #endif
 
 ; ****** at the NEW standard address $FFC0, this will be at $FFDE ******
@@ -704,13 +695,13 @@ panic_loop:
 ; might go elsewhere
 irq:
 	LDX fw_isr			; vectored ISR
-	JMP 0,X			; MUST end in RTI
+	JMP 0,X				; MUST end in RTI
 
 ; *** minimOS SWI handler *** $FFE8
 ; might go elsewhere
-brk_hndl:		; label from vector list
+brk_hndl:				; label from vector list
 	LDX fw_brk			; get vectored pointer
-	JMP 0,X			; MUST end in RTI
+	JMP 0,X				; MUST end in RTI
 
 ; $FFED...
 

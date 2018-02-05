@@ -1,7 +1,7 @@
-; minimOS·63 0.6a11 API/ABI
+; minimOS·63 0.6a12 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
 ; (c) 2017-2018 Carlos J. Santisteban
-; last modified 20180108-1337
+; last modified 20180205-0954
 ; MASM compliant 20170614, 8-char max names 20170805
 
 ; *************************************************
