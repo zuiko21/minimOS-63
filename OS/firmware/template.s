@@ -2,7 +2,7 @@
 ; sort-of generic template, but intended for KERAton
 ; v0.6a14
 ; (c)2017-2018 Carlos J. Santisteban
-; last modified 20180205-1005
+; last modified 20180205-1100
 ; MASM compliant 20170614
 
 #define		FIRMWARE	_FIRMWARE
@@ -49,88 +49,95 @@ fw_mname:
 	FCB 	0
 #endif
 
+; 6800 architecture needs JuMP table at fixed address!
+
 ; **************************
 ; **************************
 ; ****** cold restart ******
 ; **************************
 ; **************************
-; basic init
+
 reset:
-	SEI					; cold boot
-	LDS #SPTR			; initialise stack pointer, machine-dependent
+; *** basic init ***
+#include "firmware/modules/basic_init.s"
+
+
+; ******************************
+; *** minimal hardware setup ***
+; ******************************
+
+; check for peripherals and disable all interrupts *** will differ widely in MCUs
+#include "firmware/modules/check_irq.s"
 
 ; *********************************
 ; *** optional firmware modules ***
 ; *********************************
-post:
+
+; optional boot selector
+;#include "firmware/modules/bootoff.s"
 
 ; might check ROM integrity here
 ;#include "firmware/modules/romcheck.s"
 
+; some systems might copy ROM-in-RAM and continue at faster speed!
+;#include "firmware/modules/rominram.s"
+
+; startup beep
+;#include "firmware/modules/beep.s"	; basic standard beep
+
 ; SRAM test
 ;#include "firmware/modules/ramtest.s"
-
-; ***********************************
-; *** firmware parameter settings ***
-; ***********************************
-; *** set default CPU type ***
-	LDAA #'M'			; default 6800 installed
-	STAA fw_cpu			; store variable
-; ...but check it for real afterwards, at least rejecting 6809
-#include	"modules/cpu_check.s"
-
-; *** preset kernel start address (standard label from ROM file) ***
-	LDX #kernel			; get full address
-	STX fw_warm			; store in fwvars, really needed?
-
-; *** preset SWI & NMI handlers ***
-	LDX #std_nmi		; default routine just like firmware-supplied NMI
-	STX fw_brk			; new fwvar
-; as NMI will be validated, no need to preinstall it!
-
-; *** reset jiffy count ***
-	LDX #0				; not worth a loop
-	STX ticks			; reset word
-	STX ticks+2			; next
 
 ; ********************************
 ; *** hardware interrupt setup ***
 ; ********************************
-; KERAton has no VIA, jiffy IRQ is likely to be fixed on, perhaps enabling counter input on PIA
-;	LDAA #$C0			; enable T1 (jiffy) interrupt only
-;	STAA VIA_J+IER
 
-; *** preset jiffy irq frequency ***
-; should get accurate values from options.h
-	LDX #IRQ_PER		; this is period!
-; here comes the standard procedure, where JIFFY is able to change frequency!
-	STX irq_hz		; set parameter
-	_ADMIN(JIFFY)		; proceed
-; machines with FIXED IRQ frequency (eg. KERAton) do this instead
-;	STX irq_freq		; only for reading value!
+; peripheral initialisation (and stop beeping)
+#include "firmware/modules/pia_init.s"
 
-; **********************************
+; ***********************************
+; *** firmware parameter settings ***
+; ***********************************
+
+; *** set default CPU type ***
+; just set expected default type as defined in options.h...
+;#include "firmware/modules/default_cpu.s"
+; ...or actually check for it!
+#include "firmware/modules/cpu_check.s"
+; do NOT include both files at once!
+
+; *** continue parameter setting ***
+; preset kernel start address
+#include "firmware/modules/kern_addr.s"
+
+; preset default SWI handler
+#include "firmware/modules/swi_addr.s"
+
+; no need to set NMI as it will be validated
+
+
+; preset jiffy irq frequency
+#include "firmware/modules/jiffy_hz.s"
+
+; reset jiffy count
+#include "firmware/modules/jiffy_rst.s"
+
+; reset last installed kernel (new)
+;#include "firmware/modules/rst_lastk.s"
+
 ; *** direct print splash string ***
-; **********************************
-	LDX #fw_splash		; reset index
-fws_loop:
-		LDAA 0,X			; get char
-			BEQ fws_cr			; no more to print
-		STAA $0F			; visual 6800 output
-		INX					; next char
-		BRA fws_loop
-fws_cr:
-	LDAA #CR			; trailing CR, needed by console!
-	STAA $0F			; visual 6800 output
+#include "firmware/modules/splash.s"
 
-; *** might try to download a kernel just here, updating fw_warm accordingly ***
+; *** optional network booting ***
+; might modify the contents of fw_warm
+;#include "firmware/modules/netboot.s"
 
 ; ************************
 ; *** start the kernel ***
 ; ************************
 start_kernel:
-	LDX fw_warm			; get pointer
-	JMP 0,X				; jump there!
+#include "firmware/modules/start.s"
+
 
 ; ********************************
 ; ********************************
@@ -651,16 +658,16 @@ ll_loop:
 
 ; temporary empty memory map
 fw_map:
-	FCB		0
+	FCB	0
 
 
 ; *********************************
 ; *** administrative JUMP table ***
 ; *********************************
-	ORG		admin_ptr	; must be set in S19 format!
+	ORG	admin_ptr	; must be set in S19 format!
 
 ; generic functions, esp. interrupt related
-	JMP fw_gestalt		; GESTALT get system info (renumbered) @0
+	JMP fw_gestalt		; GESTALT get system info (renumbered) @ $FFC0
 	JMP fw_s_isr		; SET_ISR set IRQ vector +3
 	JMP fw_s_nmi		; SET_NMI set (magic preceded) NMI routine +6
 	JMP fw_s_brk		; SET_DBG set debugger, new 20170517 +9
@@ -710,22 +717,22 @@ brk_hndl:				; label from vector list
 ; **********************************
 
 ; *** Hitachi ROM vectors ***
-	ORG		$FFEE		; must be set in S19 format!
+	ORG	$FFEE			; must be set in S19 format!
 
-	FDB		nmi			; TRAP	@ $FFEE
+	FDB	nmi				; TRAP	@ $FFEE
 
 ; *** Microcontroller ROM vectors ***
-	ORG		$FFF0		; should be already at it
+	ORG	$FFF0			; should be already at it
 
-	FDB		nmi			; SCI	@ $FFF0
-	FDB		nmi			; TOF	@ $FFF2
-	FDB		nmi			; OCF	@ $FFF4
-	FDB		nmi			; ICF	@ $FFF6
+	FDB	nmi				; SCI	@ $FFF0
+	FDB	nmi				; TOF	@ $FFF2
+	FDB	nmi				; OCF	@ $FFF4
+	FDB	nmi				; ICF	@ $FFF6
 
 ; *** 6800 ROM vectors ***
-	ORG		$FFF8		; just in case
+	ORG	$FFF8			; just in case
 
-	FDB		irq			; IRQ @ $FFF8
-	FDB		brk_hndl	; SWI @ $FFFA
-	FDB		nmi			; NMI @ $FFFC
-	FDB		reset		; RES @ $FFFE
+	FDB	irq				; IRQ @ $FFF8
+	FDB	brk_hndl		; SWI @ $FFFA
+	FDB	nmi				; NMI @ $FFFC
+	FDB	reset			; RES @ $FFFE
