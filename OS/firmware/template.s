@@ -1,6 +1,6 @@
 ; firmware for minimOS·63
 ; sort-of generic template, but intended for KERAton
-; v0.6a15
+; v0.6a16
 ; (c)2017-2018 Carlos J. Santisteban
 ; last modified 20180219-0924
 
@@ -23,7 +23,7 @@ fw_start:
 	FCC		"boot"				; mandatory filename for firmware
 	FCB		0
 fw_splash:
-	FCC		"0.6a14 firmware for "	; version in comment
+	FCC		"0.6a16 firmware for "	; version in comment
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB		0
@@ -42,7 +42,7 @@ fw_mname:
 #else
 ; if case of no headers, at least keep machine name somewhere
 fw_splash:
-	FCC		"0.6a14 firmware for "
+	FCC		"0.6a16 firmware for "
 fw_mname:
 	FCC		MACHINE_NAME
 	FCB 	0
@@ -122,7 +122,7 @@ reset:
 #include "firmware/modules/jiffy_rst.s"
 
 ; reset last installed kernel (new)
-;#include "firmware/modules/rst_lastk.s"
+#include "firmware/modules/rst_lastk.s"
 
 ; *** direct print splash string ***
 #include "firmware/modules/splash.s"
@@ -148,58 +148,20 @@ start_kernel:
 ; *** vectored NMI handler with magic number ***
 ; **********************************************
 nmi:
-; registers are saved! but check system pointers
-; make NMI reentrant *** could use some 6801 optimisation
-#ifdef	MC6801
-	LDX systmp			; get word...
-	PSHX				; ...and keep it
-#else
-	LDAA systmp			; get original word
-	LDAB systmp+1
-	PSHB				; store them in similar order
-	PSHA
-#endif
-; prepare for next routine
-	LDX fw_nmi			; get vector to supplied routine
-#ifdef	SAFE
-; check whether user NMI pointer is valid
-; as the magic string will NOT be "executed", can remain the same as 6502
-	LDAA 0,X			; get first char
-	CMPA #'U'			; matches magic string?
-		BNE rst_nmi			; error, use standard handler
-	LDAA 1,X			; get second char
-	CMPA #'N'			; matches magic string?
-		BNE rst_nmi			; error, use standard handler
-	LDAA 2,X			; get third char
-	CMPA #'j'			; matches magic string?
-		BNE rst_nmi			; error, use standard handler
-	LDAA 3,X			; get fourth char
-	CMPA #'*'			; matches magic string?
-		BNE rst_nmi			; error, use standard handler
-#endif
-	JSR 4,X				; routine OK, skip magic string!
-; *** here goes the former nmi_end routine ***
-nmi_end:
-#ifdef	MC6801
-	PULX				; retrieve...
-	STX systmp			; ...and restore
-#else
-	PULA				; retrieve saved vars
-	PULB
-	STAB systmp+1		; restore values
-	STAA systmp
-#endif
-	RTI					; resume normal execution, hopefully
+#include "firmware/modules/nmi_hndl.s"
 
-; *** execute standard NMI handler, if magic string failed ***
-rst_nmi:
-	BSR std_nmi			; call standard routine
-	BRA nmi_end			; and finish, much simpler
+; ****************************
+; *** vectored IRQ handler ***
+; ****************************
+; nice to be here, but might go elsewhere in order to save space, like between FW interface calls
+irq:
+#include "firmware/modules/irq_hndl.s"
 
-; *** default code for NMI handler, if not installed or invalid, should end in RTS ***
-std_nmi:
-#include "modules/std_nmi.s"
-
+; ***************************
+; *** minimOS BRK handler ***
+; ***************************
+swi_hndl:				; label from vector list
+#include "firmware/modules/swi_hndl.s"
 
 ; ********************************
 ; *** administrative functions ***
@@ -696,20 +658,7 @@ fw_map:
 panic_loop:
 		BRA panic_loop		; always OK
 
-; ****** use some space for interrupt handlers ******
-; *** vectored IRQ handler *** $FFE3
-; might go elsewhere
-irq:
-	LDX fw_isr			; vectored ISR
-	JMP 0,X				; MUST end in RTI
-
-; *** minimOS SWI handler *** $FFE8
-; might go elsewhere
-brk_hndl:				; label from vector list
-	LDX fw_brk			; get vectored pointer
-	JMP 0,X				; MUST end in RTI
-
-; $FFED...
+; ****** might use some space for interrupt handlers ******
 
 ; **********************************
 ; ****** hardware ROM vectors ******
@@ -732,6 +681,6 @@ brk_hndl:				; label from vector list
 	ORG	$FFF8			; just in case
 
 	FDB	irq				; IRQ @ $FFF8
-	FDB	brk_hndl		; SWI @ $FFFA
+	FDB	swi_hndl		; SWI @ $FFFA
 	FDB	nmi				; NMI @ $FFFC
 	FDB	reset			; RES @ $FFFE

@@ -1,12 +1,13 @@
 ; firmware variables for minimOS·63
 ; sort-of template, possibly fine for KERAton
-; v0.6a5
+; v0.6a6
 ; (c) 2017-2018 Carlos J. Santisteban
-; last modified 20180219-0836
+; last modified 20180219-0929
 
 #ifndef	LOWRAM
-fw_table	FILL	$FF, 256	; NOT available in 128-byte systems
+fw_table	FILL $FF, API_SIZE	; NOT available in 128-byte systems
 #endif
+fw_lastk	RMB 2				; address of last installed kernel jump table! new 20180116
 fw_isr		RMB 2				; ISR vector
 fw_nmi		RMB 2				; NMI vector, fortunately checks for integrity
 fw_dbg		RMB 2				; SWI vector, new 20170602
