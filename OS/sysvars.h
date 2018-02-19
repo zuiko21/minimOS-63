@@ -1,6 +1,6 @@
-; minimOS·63 0.6a8 System Variables
-; (c) 2012-2017 Carlos J. Santisteban
-; last modified 20171030-0954
+; minimOS·63 0.6a9 System Variables
+; (c) 2012-2018 Carlos J. Santisteban
+; last modified 20180219-0836
 ; shorter names 20170808
 
 ; **** I/O management ****
@@ -61,6 +61,5 @@ run_pid		FCB	0		; current PID running for easy kernel access, will be set by new
 dflt_in		EQU std_in	; in LOWRAM systems, both global and local standard devices are the same!
 dfltout		EQU stdout
 #endif
-old_t1		RMB	2		; *** keep old T1 latch value for FG, revised 150208 *** might be revised or moved to firmware vars!
 
 ; ** driver-specific system variables come after this one, in main source **
