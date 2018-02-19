@@ -169,100 +169,30 @@ swi_hndl:				; label from vector list
 
 ; *** generic functions ***
 
+; *********************************
 ; GESTALT, get system info, API TBD
-; cpu_ll	= CPU type
-; c_speed	= speed code (16b)
-; str_pt	= points to a string with machine name
-; ex_pt		= points to a map of default memory conf ???
-; k_ram		= available pages of (kernel) SRAM
-; *** MAY change ABI/API ***REVISE
-
+; *********************************
 gestalt:
+#include "firmware/modules/gestalt.s"
 
-	LDAB fw_cpu			; get kind of CPU (previoulsy stored or determined) (3)
-	LDX #SPEED_CODE		; speed code as determined in options.h ()
-	STAB cpu_ll			; set outputs (4+)
-	STX c_speed
-	LDAA himem			; get pages of SRAM??? (3)
-	STAA k_ram			; store output (4)
-; no "high" RAM on this architecture
-	LDX #fw_mname		; get string pointer (3)
-	STX str_pt			; put it outside (5)
-	LDX #fw_map			; pointer to standard map TBD ???? (3)
-	STX ex_pt			; set output (5)
-	_DR_OK				; done (7)
-
-
+; ***********************
 ; SET_ISR, set IRQ vector
-;		INPUT
-; kerntab	= address of ISR (will take care of all necessary registers)
-;		0 means read current!
-
+; ***********************
 set_isr:
-; no CS as STX is atomic!
-	LDX kerntab			; get pointer
-	BEQ fw_r_isr		; in case of read...
-		STX fw_isr			; ...or store for firmware
-		_DR_OK				; done
-fw_r_isr:
-	LDX fw_isr			; get current
-	STX kerntab			; and return it
-	_DR_OK				; done
+#include "firmware/modules/set_isr.s"
 
-
-; SET_NMI, set NMI vector
-;		INPUT
-; kerntab	= address of NMI code (including magic string, ends in RTS)
-;		0 means read current!
-
-; might check whether the pointed code starts with the magic string
-; as the magic string will NOT get "executed", can safely be the same as 6502
-; no CS as STX is atomic!
-
+; ********************************
+; SET_NMI, set NMI handler routine
+; ********************************
 set_nmi:
-	LDX kerntab			; get pointer to supplied code + magic string
-		BEQ fw_r_nmi		; in case of read...
-#ifdef	SAFE
-	LDAA 0,X			; first char
-	CMPA #'U'			; is it correct?
-		BNE fsn_err			; not!
-	LDAA 1,X			; second char
-	CMPA #'N'			; correct?
-		BNE fsn_err			; not!
-	LDAA 2,X			; third char
-	CMPA #'j'			; correct?
-		BNE fsn_err			; not!
-	LDAA 3,X			; last char
-	CMPA #'*'			; correct?
-	BEQ fsn_valid		; yeah, proceed!
-fsn_err:
-		_DR_ERR(CORRUPT)	; ...or invalid NMI handler
-fsn_valid:
-#endif
-; transfer supplied pointer to firmware vector
-	STX fw_nmi			; store for firmware
-	_DR_OK				; done
-fw_r_nmi:
-	LDX fw_nmi			; get current
-	STX kerntab			; and return it
-	_DR_OK				; done
+#include "firmware/modules/set_nmi.s"
 
-
-; SET_DBG, set SWI handler
-;		INPUT
-; kerntab	= address of SWI routine (ending in RTS)
-;		0 means read current!
-; no CS as STX is atomic!
-
+; ********************************
+; SET_DBG, set SWI handler routine
+; ********************************
 set_dbg:
-	LDX kerntab			; get pointer
-	BEQ fw_r_brk		; in case of read...
-		STX fw_brk			; store for firmware
-		_DR_OK				; done
-fw_r_brk:
-	LDX fw_brk			; get current
-	STX kerntab			; and return it
-	_DR_OK				; done
+#include "firmware/modules/set_dbg.s"
+
 
 
 ; JIFFY, set jiffy IRQ frequency
