@@ -1,9 +1,8 @@
 ; firmware for minimOS·63
 ; sort-of generic template, but intended for KERAton
-; v0.6a14
+; v0.6a15
 ; (c)2017-2018 Carlos J. Santisteban
-; last modified 20180205-1100
-; MASM compliant 20170614
+; last modified 20180219-0924
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -216,7 +215,7 @@ std_nmi:
 ; k_ram		= available pages of (kernel) SRAM
 ; *** MAY change ABI/API ***REVISE
 
-fw_gestalt:
+gestalt:
 
 	LDAB fw_cpu			; get kind of CPU (previoulsy stored or determined) (3)
 	LDX #SPEED_CODE		; speed code as determined in options.h ()
@@ -237,7 +236,7 @@ fw_gestalt:
 ; kerntab	= address of ISR (will take care of all necessary registers)
 ;		0 means read current!
 
-fw_s_isr:
+set_isr:
 ; no CS as STX is atomic!
 	LDX kerntab			; get pointer
 	BEQ fw_r_isr		; in case of read...
@@ -258,7 +257,7 @@ fw_r_isr:
 ; as the magic string will NOT get "executed", can safely be the same as 6502
 ; no CS as STX is atomic!
 
-fw_s_nmi:
+set_nmi:
 	LDX kerntab			; get pointer to supplied code + magic string
 		BEQ fw_r_nmi		; in case of read...
 #ifdef	SAFE
@@ -293,7 +292,7 @@ fw_r_nmi:
 ;		0 means read current!
 ; no CS as STX is atomic!
 
-fw_s_brk:
+set_dbg:
 	LDX kerntab			; get pointer
 	BEQ fw_r_brk		; in case of read...
 		STX fw_brk			; store for firmware
@@ -311,7 +310,7 @@ fw_r_brk:
 ; irq_hz	= actually set frequency (in case of no change)
 ; C			= could not set
 
-fw_jiffy:
+jiffy:
 	LDX irq_hz			; get input values
 	BNE fj_set			; not just checking
 		LDX irq_freq		; get current frequency
@@ -502,7 +501,7 @@ fj_over:
 ; *** X	= 0 (periodic), 2 (async IRQ @ 65xx) *********************** 6502 ************
 ; *** notice NON-standard output register for faster indexed jump! ***
 ; other even values hardware dependent
-fw_i_src:
+irq_src:
 ; ****** TO BE DONE ******
 	_DR_ERR(UNAVAIL)	; not yet implemented
 
@@ -513,7 +512,7 @@ fw_i_src:
 ; *** special codes for SWI/NMI triggering (10 = NMI, 12 = SWI) ***
 ; C -> not implemented
 
-fw_power:
+poweroff:
 	TSTB				; is it zero? could be CMPB #PW_STAT
 	BNE fwp_ns			; not suspend
 ; this would be suspend code...
@@ -543,7 +542,7 @@ fwp_nsi:
 
 
 ; FREQ_GEN, frequency generator hardware interface, TBD
-fw_fgen:
+freq_gen:
 ; ****** TO BE DONE ******
 	_DR_ERR(UNAVAIL)	; not yet implemented
 
@@ -557,7 +556,7 @@ fw_fgen:
 ; kerntab	= address of supplied JUMP table
 
 ; CS is 28+3 bytes, (6+)18+ 256*43 = (6+) 11026 cycles
-fw_install:
+install:
 	_CRITIC				; disable interrupts!
 	PSHA				; EEEEEEEEEEEK
 	CLRB				; reset counter (2)
@@ -586,7 +585,7 @@ fwi_loop:
 ; kerntab <- address of code
 ; acc B <- function to be patched
 
-fw_patch:
+patch:
 	_CRITIC				; disable interrupts, respects A
 #ifdef	MC6801
 	PSHA				; eeeek
@@ -612,7 +611,7 @@ fw_patch:
 
 #else
 ; these functions will not work on 128-byte systems!
-fw_install:
+install:
 ; *** limited version ***
 #ifdef	SAFE
 ; no CS as STX is atomic!
@@ -621,7 +620,7 @@ fw_install:
 	_DR_OK				; done
 #endif
 
-fw_patch:
+patch:
 	_DR_ERR(UNAVAIL)	; not available
 
 #endif
@@ -664,19 +663,19 @@ fw_map:
 ; *********************************
 ; *** administrative JUMP table ***
 ; *********************************
-	ORG	admin_ptr	; must be set in S19 format!
+	ORG	admin_ptr		; must be set in S19 format!
 
 ; generic functions, esp. interrupt related
-	JMP fw_gestalt		; GESTALT get system info (renumbered) @ $FFC0
-	JMP fw_s_isr		; SET_ISR set IRQ vector +3
-	JMP fw_s_nmi		; SET_NMI set (magic preceded) NMI routine +6
-	JMP fw_s_brk		; SET_DBG set debugger, new 20170517 +9
-	JMP fw_jiffy		; JIFFY set jiffy IRQ speed, ** TBD ** +C
-	JMP fw_i_src		; *** IRQ_SRC get interrupt source for total ISR independence +F
+	JMP gestalt			; GESTALT get system info (renumbered) @ $FFC0
+	JMP set_isr			; SET_ISR set IRQ vector +3
+	JMP set_nmi			; SET_NMI set (magic preceded) NMI routine +6
+	JMP set_dbg			; SET_DBG set debugger, new 20170517 +9
+	JMP jiffy			; JIFFY set jiffy IRQ speed, ** TBD ** +C
+	JMP irq_src			; *** IRQ_SRC get interrupt source for total ISR independence +F
 
 ; pretty hardware specific
-	JMP fw_power		; POWEROFF power-off, suspend or cold boot +12
-	JMP fw_fgen			; *** FREQ_GEN frequency generator hardware interface, TBD +15
+	JMP poweroff		; POWEROFF power-off, suspend or cold boot +12
+	JMP freq_gen		; *** FREQ_GEN frequency generator hardware interface, TBD +15
 
 ; a reduced INSTALL is available for LOWRAM system, calling it is mandatory!
 	JMP fw_install		; INSTALL copy jump table +18
