@@ -1,8 +1,8 @@
 ; firmware for minimOS·63
 ; sort-of generic template, but intended for KERAton
-; v0.6a16
+; v0.6a17
 ; (c)2017-2018 Carlos J. Santisteban
-; last modified 20180219-0958
+; last modified 20181105-1112
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -294,7 +294,7 @@ fw_map:
 ; *********************************
 ; *** administrative JUMP table ***
 ; *********************************
-	ORG	admin_ptr		; must be set in S19 format!
+	ORG	adm_ptr			; must be set in S19 format!
 
 ; generic functions, esp. interrupt related
 	JMP gestalt			; GESTALT get system info (renumbered) @ $FFC0
