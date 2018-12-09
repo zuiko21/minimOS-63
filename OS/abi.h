@@ -1,7 +1,7 @@
-; minimOS·63 0.6a14 API/ABI
+; minimOS·63 0.6a15 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
 ; (c) 2017-2018 Carlos J. Santisteban
-; last modified 20181105-1105
+; last modified 20181209-
 
 ; *************************************************
 ; *************************************************
@@ -112,6 +112,7 @@ INSTALL		EQU	FREQ_GEN+3		; copy jump table
 ; not for LOWRAM systems
 PATCH		EQU	INSTALL+3		; patch single function (renumbered)
 ; CONTEXT no longer used, as would be just called from a *specific* Multitasking driver
+RELOC		EQU	PATCH+3			; relocate code and/or data ***TBD***
 
 ; **************************
 ; ** Driver table offsets **
