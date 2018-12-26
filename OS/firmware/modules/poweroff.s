@@ -1,10 +1,10 @@
 ; minimOS·63 firmware module
 ; (C) 2018 Carlos J. Santisteban
-; last modified 20180219-0952
+; last modified 20181226-1439
 
 ; POWEROFF, poweroff etc
 ; acc B <- mode (0 = suspend, 2 = warmboot, 4 = coldboot, 6 = poweroff)
-; *** special codes for SWI/NMI triggering (10 = NMI, 12 = SWI) ***
+; *** special codes for hard interrupts triggering (10 = NMI, 12 = IRQ) ***
 ; C -> not implemented
 
 poweroff:
@@ -22,13 +22,13 @@ fwp_nw:
 	BNE fwp_nc			; not
 		JMP reset			; or go to internal reset!
 fwp_nc:
-	CMPB #PW_HARD		; NMI?
+	CMPB #PW_NMI		; NMI?
 	BNE fwp_nhi			; not
 		JMP nmi				; NMI!
 fwp_nhi:
-	CMPB #PW_SOFT		; SWI? Not sure if really needed...
+	CMPB #PW_IRQ		; IRQ? new *** must revise
 	BNE fwp_nsi			; not
-		JMP brk_hndl		; SWI!
+		JMP irq				; IRQ!
 fwp_nsi:
 	CMPB #PW_OFF		; off?
 	BNE fwp_exit		; not recognised

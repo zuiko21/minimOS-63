@@ -1,8 +1,8 @@
 ; firmware for minimOS·63
 ; sort-of generic template, but intended for KERAton
-; v0.6a17
+; v0.6a18
 ; (c)2017-2018 Carlos J. Santisteban
-; last modified 20181105-1112
+; last modified 20181226-1438
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -323,7 +323,7 @@ fw_map:
 
 ; *** panic routine, locks at very obvious address ($FFE1-$FFE2) ***
 	ORG	lock			; must be set in S19 format!
-	SEI					; locks at same address as 6502
+	SEI					; locks at about the same address as 6502
 panic_loop:
 		BRA panic_loop		; always OK
 

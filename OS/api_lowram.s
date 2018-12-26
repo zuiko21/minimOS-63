@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
-; v0.6a18
+; v0.6a19
 ; (c) 2017-2018 Carlos J. Santisteban
-; last modified 20180219-0859
+; last modified 20181226-1435
 
 ; *** dummy function, non implemented ***
 unimplemented:		; placeholder here, not currently used
@@ -666,7 +666,7 @@ sd_done:
 		BEQ sd_fw			; tell firmware! (4)
 	CMPB #PW_COLD		; cold boot? (2)
 		BEQ sd_fw			; tell firmware! (4)
-	CMPB #PW_HARD		; interrupt? (2)
+	CMPB #PW_NMI		; interrupt? (2)
 		BGE sd_fw			; tell firmware! (4)
 	CMPB #PW_WARM		; just a warm restart? (2)
 	BEQ sd_warm			; will not tell firmware, just jump there (4)
