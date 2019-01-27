@@ -1,7 +1,7 @@
-; minimOS·63 0.6a16 API/ABI
+; minimOS·63 0.6a17 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
-; (c) 2017-2018 Carlos J. Santisteban
-; last modified 20181226-1432
+; (c) 2017-2019 Carlos J. Santisteban
+; last modified 20190127-1308
 
 ; *************************************************
 ; *************************************************
@@ -27,7 +27,7 @@ BL_STAT		EQU	BL_CNFG+3		; device status
 OPEN_W		EQU	BL_STAT+3		; open window or get I/O devices
 CLOSE_W		EQU	OPEN_W+3		; close a window or release device and its buffer
 FREE_W		EQU	CLOSE_W+3		; release a window but let it on screen, keeping its buffer, may be closed by kernel
-FLOAT_W		EQU FREE_W+3		; put this window in foreground, interface similar to B_FORE
+FLOAT_W		EQU	FREE_W+3		; put this window in foreground, interface similar to B_FORE
 
 ; other generic functions
 UPTIME		EQU	FLOAT_W+3		; give uptime in ticks and seconds
@@ -42,14 +42,15 @@ B_SIGNAL	EQU	B_EXEC+3		; send UNIX_like signal to a braid
 B_FLAGS		EQU	B_SIGNAL+3		; get execution flags of a braid
 SET_HNDL	EQU	B_FLAGS+3		; set SIGTERM handler
 B_YIELD		EQU	SET_HNDL+3		; give away CPU time, not really needed but interesting anyway
-B_FORE		EQU B_YIELD+3		; set foreground task ***new 20181011***
-GET_FG		EQU B_FORE+3		; get previously set foreground task ***new20181022***
+B_FORE		EQU	B_YIELD+3		; set foreground task ***new 20181011***
+GET_FG		EQU	B_FORE+3		; get previously set foreground task ***new20181022***
 ; unpatched functions...
-B_EVENT		EQU GET_FG+3		; identify event and send signal to foreground task ***new 20181011*** for drivers
+B_EVENT		EQU	GET_FG+3		; identify event and send signal to foreground task ***new 20181011*** for drivers
 GET_PID		EQU	B_EVENT+3		; get current braid PID
 
 ; some new driver functionalities, perhaps OK with LOWRAM systems
-DR_INFO		EQU GET_PID+3		; get driver header, new
+DR_INFO		EQU	GET_PID+3		; get driver header, new
+DR_EXEC		EQU	DR_INFO+3		; execute driver routine, newer
 AQ_MNG		EQU	DR_INFO+3		; get asyncronous task status, or enable/disable it!
 PQ_MNG		EQU	AQ_MNG+3		; get periodic task status, enable/disable it or set frequency!
 

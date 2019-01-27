@@ -1,8 +1,8 @@
 ; minimOS·63 generic Kernel API
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
-; v0.6a14
-; (c) 2017-2018 Carlos J. Santisteban
-; last modified 20181226-1435
+; v0.6a15
+; (c) 2017-2019 Carlos J. Santisteban
+; last modified 20190127-1311
 
 ; *** dummy function, non implemented ***
 unimplemented:		; placeholder here, not currently used
@@ -20,7 +20,7 @@ aq_mng:
 pq_mng:
 dr_shut:
 dr_info:
-
+dr_exec:
 	_ERR(UNAVAIL)		; go away!
 
 ; ********************************

@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
-; v0.6a19
-; (c) 2017-2018 Carlos J. Santisteban
-; last modified 20181226-1435
+; v0.6a20
+; (c) 2017-2019 Carlos J. Santisteban
+; last modified 20190127-1312
 
 ; *** dummy function, non implemented ***
 unimplemented:		; placeholder here, not currently used
@@ -25,7 +25,7 @@ dr_shut:
 aq_mng:
 pq_mng:
 dr_info:
-
+dr_exec:
 	_ERR(UNAVAIL)		; go away!
 
 ; ********************************
