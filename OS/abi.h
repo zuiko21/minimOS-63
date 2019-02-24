@@ -1,7 +1,7 @@
-; minimOS·63 0.6a17 API/ABI
+; minimOS·63 0.6a18 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
 ; (c) 2017-2019 Carlos J. Santisteban
-; last modified 20190127-1308
+; last modified 20190224-2110
 
 ; *************************************************
 ; *************************************************
@@ -106,6 +106,7 @@ IRQ_SRC		EQU	JIFFY+3			; get interrupt source for total ISR independence
 ; pretty hardware specific
 POWEROFF	EQU	IRQ_SRC+3		; power-off, suspend or cold boot (invoke debuggers?)
 FREQ_GEN	EQU	POWEROFF+3		; frequency generator hardware interface, TBD
+; CONIO may come here
 
 ; reduced version for LOWRAM systems, otherwise standard and mandatory use
 INSTALL		EQU	FREQ_GEN+3		; copy jump table
@@ -114,6 +115,7 @@ INSTALL		EQU	FREQ_GEN+3		; copy jump table
 PATCH		EQU	INSTALL+3		; patch single function (renumbered)
 ; CONTEXT no longer used, as would be just called from a *specific* Multitasking driver
 RELOC		EQU	PATCH+3			; relocate code and/or data ***TBD***
+CONIO		EQU	RELOC+3			; basic console, where available
 
 ; **************************
 ; ** Driver table offsets **
