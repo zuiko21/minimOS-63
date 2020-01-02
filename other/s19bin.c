@@ -1,5 +1,6 @@
 /*
  * stub for S19 to binary conversion
+ * (c) 2020 Carlos J. Santisteban
  */
  
 #include <stdio.h>
