@@ -1,6 +1,6 @@
 ; minimOS·63 generic Kernel API for LOWRAM systems
 ; v0.6a20
-; (c) 2017-2019 Carlos J. Santisteban
+; (c) 2017-2020 Carlos J. Santisteban
 ; last modified 20190127-1312
 
 ; *** dummy function, non implemented ***

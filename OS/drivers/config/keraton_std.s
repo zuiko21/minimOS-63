@@ -1,7 +1,7 @@
 ; includes for minimOS·63 drivers
 ; KERAton specific configuration! but visual6800 support this far
 ; v0.6a3
-; (c) 2017 Carlos J. Santisteban
+; (c) 2017-2020 Carlos J. Santisteban
 ; last modified 20170808-2229
 
 #define		DRIVERS		_DRIVERS

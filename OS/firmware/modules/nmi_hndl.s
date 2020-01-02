@@ -1,5 +1,5 @@
 ; firmware module for minimOS·63
-; (C) 2018 Carlos J. Santisteban
+; (C) 2018-2020 Carlos J. Santisteban
 ; last modified 20180219-0935
 
 ; **********************************************

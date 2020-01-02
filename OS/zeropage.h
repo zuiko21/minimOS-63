@@ -1,5 +1,6 @@
 ; minimOS·63 zeropage
 ; v0.6a9
+; (c) 2017-2020 Carlos J. Santisteban
 ; last modified 20170904-2137
 ; MASM compliant 20170614
 

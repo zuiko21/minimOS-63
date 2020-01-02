@@ -1,6 +1,6 @@
 ; minimOS·63 0.6a18 API/ABI
 ; *** for Motorola 6800/6802/6808 & derived microcontrollers ***
-; (c) 2017-2019 Carlos J. Santisteban
+; (c) 2017-2020 Carlos J. Santisteban
 ; last modified 20190224-2110
 
 ; *************************************************

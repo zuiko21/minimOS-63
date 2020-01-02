@@ -3,7 +3,7 @@
 ; updated to tell Hitachi and other microcontrrollers!
 ; masm compliant style 20170613
 ; v0.6b3
-; (C) 2017 Carlos J. Santisteban
+; (C) 2017-2020 Carlos J. Santisteban
 ; last modified 20170614-0932
 
 	LDAA #2			; 86 02

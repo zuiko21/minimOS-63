@@ -1,6 +1,6 @@
 ; minimOS·63 ROM template
 ; v0.6a2
-; (c) 2017 Carlos J. Santisteban
+; (c) 2017-2020 Carlos J. Santisteban
 ; last modified 20170808-2146
 
 ; create ready-to-blow ROM image

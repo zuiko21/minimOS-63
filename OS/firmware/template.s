@@ -1,7 +1,7 @@
 ; firmware for minimOS·63
 ; sort-of generic template, but intended for KERAton
 ; v0.6a18
-; (c)2017-2018 Carlos J. Santisteban
+; (c)2017-2020 Carlos J. Santisteban
 ; last modified 20181226-1438
 
 #define		FIRMWARE	_FIRMWARE

@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel
 ; v0.6a17
 ; MASM compliant 20170614
-; (c) 2017 Carlos J. Santisteban
+; (c) 2017-2020 Carlos J. Santisteban
 ; last modified 20171023-1000
 
 ; avoid standalone definitions

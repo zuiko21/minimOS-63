@@ -1,7 +1,7 @@
 ; minimOS·63 generic Kernel API
 ; ****** originally copied from LOWRAM version, must be completed from 6502 code *****
 ; v0.6a15
-; (c) 2017-2019 Carlos J. Santisteban
+; (c) 2017-2020 Carlos J. Santisteban
 ; last modified 20190127-1311
 
 ; *** dummy function, non implemented ***

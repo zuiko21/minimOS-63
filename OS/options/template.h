@@ -1,7 +1,7 @@
 ; default options for minimOS·63 and other modules
 ; sort-of-template, possibly KERAton inspired
 ; copy or link as options.h in root dir
-; (c) 2015-2017 Carlos J. Santisteban
+; (c) 2015-2020 Carlos J. Santisteban
 ; last modified 20170621-1800
 
 ; *** set conditional assembly ***

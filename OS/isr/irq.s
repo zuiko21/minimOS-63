@@ -1,7 +1,7 @@
 ; ISR for minimOS•63
 ; v0.6a6, should match kernel.s
 ; features TBD
-; (c) 2017 Carlos J. Santisteban
+; (c) 2017-2020 Carlos J. Santisteban
 ; last modified 20170815-1722
 
 #define		ISR		_ISR
