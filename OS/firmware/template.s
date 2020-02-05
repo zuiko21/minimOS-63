@@ -2,7 +2,7 @@
 ; sort-of generic template, but intended for KERAton
 ; v0.6a18
 ; (c)2017-2020 Carlos J. Santisteban
-; last modified 20181226-1438
+; last modified 20200105-1013
 
 #define		FIRMWARE	_FIRMWARE
 
@@ -292,7 +292,7 @@ fw_map:
 
 
 ; *********************************
-; *** administrative JUMP table ***
+; *** administrative JUMP table *** MUST be elsewhere, CoCo and Dragon do NOT allow $FFC0!
 ; *********************************
 	ORG	adm_ptr			; must be set in S19 format!
 
@@ -322,6 +322,7 @@ fw_map:
 ; *****************************
 
 ; *** panic routine, locks at very obvious address ($FFE1-$FFE2) ***
+; *** *** once again, NOT compatible with CoCo/Dragon *** ***
 	ORG	lock			; must be set in S19 format!
 	SEI					; locks at about the same address as 6502
 panic_loop:
