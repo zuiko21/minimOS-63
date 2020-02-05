@@ -1,6 +1,6 @@
 ; minimOS·63 0.6a6 MACRO definitions
 ; (c) 2017-2020 Carlos J. Santisteban
-; last modified 20170808-2137
+; last modified 20200205-0959
 ; adapted to MASM 20170614
 ; short names 20170808
 
@@ -9,9 +9,11 @@
 ; **************************
 
 kern_ptr	EQU	$FC		; pointer to jump table, routines ending in RTS
-adm_ptr		EQU	$FFC0	; NEW fixed jump table, routines ending in RTS, intended for kernel/drivers ONLY
+; *** must change adm_ptr as CoCo/Dragon use that for SAM I/O ***
+adm_ptr		EQU	$FFC0	; NEW fixed jump table, routines ending in RTS, intended for kernel/drivers ONLY ***
 
 ; unified address (will lock at $FFE1-2 anyway)
+; *** must change as CoCo/Dragon mark that as reserved ***
 lock		EQU	$FFE0	; just after the above
 
 ; *****************************
@@ -69,7 +71,7 @@ FILE_DEV	EQU	130		; *** this will be sticked somewhere as no patchable API entri
 #define		LF		10
 #define		BS		8
 ; TAB confused with a 6800 mnemonic!!!
-#define		TABU	9
+#define		HTAB	9
 #define		BEL		7
 #define		ESC		27
 
