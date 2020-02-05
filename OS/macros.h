@@ -1,6 +1,6 @@
 ; minimOS·63 0.6a6 MACRO definitions
 ; (c) 2017-2020 Carlos J. Santisteban
-; last modified 20200205-0959
+; last modified 20200205-1921
 ; adapted to MASM 20170614
 ; short names 20170808
 
@@ -9,11 +9,11 @@
 ; **************************
 
 kern_ptr	EQU	$FC		; pointer to jump table, routines ending in RTS
-; *** must change adm_ptr as CoCo/Dragon use that for SAM I/O ***
-adm_ptr		EQU	$FFC0	; NEW fixed jump table, routines ending in RTS, intended for kernel/drivers ONLY ***
+; *** think about changing adm_ptr as CoCo/Dragon use that for SAM I/O ***
+adm_ptr		EQU	$FFC0	; NEW fixed jump table, routines ending in RTS, intended for kernel/drivers ONLY
 
 ; unified address (will lock at $FFE1-2 anyway)
-; *** must change as CoCo/Dragon mark that as reserved ***
+; *** think about changing that as CoCo/Dragon mark that as reserved ***
 lock		EQU	$FFE0	; just after the above
 
 ; *****************************
