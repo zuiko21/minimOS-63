@@ -1,5 +1,5 @@
 ; minimOS·63 firmware module
-; (C) 2018-2020 Carlos J. Santisteban
+; (C) 2018-2022 Carlos J. Santisteban
 ; last modified 20180219-0946
 
 ; SET_NMI, set NMI vector

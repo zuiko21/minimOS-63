@@ -1,5 +1,5 @@
 ; minimOS·63 0.6a9 System Variables
-; (c) 2012-2020 Carlos J. Santisteban
+; (c) 2012-2022 Carlos J. Santisteban
 ; last modified 20180219-0836
 ; shorter names 20170808
 

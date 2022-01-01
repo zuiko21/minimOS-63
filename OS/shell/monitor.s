@@ -1,7 +1,7 @@
 ; Monitor shell for minimOS·63 (simple version)
 ; v0.6a5
 ; last modified 20170829-1237
-; (c) 2017-2020 Carlos J. Santisteban
+; (c) 2017-2022 Carlos J. Santisteban
 
 #include "../usual.h"
 

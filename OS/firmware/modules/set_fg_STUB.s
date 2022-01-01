@@ -1,4 +1,4 @@
-; (c) 2020 Carlos J. Santisteban
+; (c) 2022 Carlos J. Santisteban
 ; **************************************************
 ; *** SET_FG, enable/disable frequency generator *** TO BE REVISED
 ; **************************************************

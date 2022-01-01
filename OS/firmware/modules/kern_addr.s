@@ -1,5 +1,5 @@
 ; minimOS·63 firmware module
-; (C) 2017-2020 Carlos J. Santisteban
+; (C) 2017-2022 Carlos J. Santisteban
 ; last modified 20180205-1051
 
 ; *** preset kernel start address (standard label from ROM file) ***

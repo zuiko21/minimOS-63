@@ -1,7 +1,7 @@
 ; firmware variables for minimOS·63
 ; sort-of template, possibly fine for KERAton
 ; v0.6a6
-; (c) 2017-2020 Carlos J. Santisteban
+; (c) 2017-2022 Carlos J. Santisteban
 ; last modified 20180219-0929
 
 #ifndef	LOWRAM

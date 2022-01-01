@@ -1,5 +1,5 @@
 ; minimOS·63 0.6a6 MACRO definitions
-; (c) 2017-2020 Carlos J. Santisteban
+; (c) 2017-2022 Carlos J. Santisteban
 ; last modified 20200205-1921
 ; adapted to MASM 20170614
 ; short names 20170808

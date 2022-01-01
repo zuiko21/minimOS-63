@@ -1,6 +1,6 @@
 /*
  * RPN expression evaluator
- * (c) 2017-2020 Carlos J. Santisteban
+ * (c) 2017-2022 Carlos J. Santisteban
  * last modified 20170619-1445
  */
 

@@ -1,6 +1,6 @@
 ; minimOS·63 basic I/O driver for visual6800 simulator
 ; v0.9a4
-; (c) 2017-2020 Carlos J. Santisteban
+; (c) 2017-2022 Carlos J. Santisteban
 ; last modified 20170831-1638
 
 #include	"../usual.h"
