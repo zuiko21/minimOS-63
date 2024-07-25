@@ -9,7 +9,7 @@ loop:
 	CPX #$8000	; FFCA: 8C 80 00
 	BNE loop	; FFCD: 26 F8
 lock:
-	BRA lock	; FFCF: 20 FD
+	BRA lock	; FFCF: 20 FE ; EEEEEEEEEEEEEEEEEEK
 
 nmi:
 	INCA		; FFD1: 4C
