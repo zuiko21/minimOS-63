@@ -3,7 +3,7 @@
 ; PA7 + PA0-PA6 = C5-B5
 ; hold next button for Sharp, previous for Flat (e.g. PA0+PA1 = C#4) 
 ; (c) 2024 Carlos J. Santisteban
-; last modified 20240727-1002
+; last modified 20240727-1158
 
 	* = $FE00				; make that $1000 for downloadable version
 
@@ -23,7 +23,7 @@ reset:
 	LDS #$00FF				; FE01. 8E 00 FF	; stack is ready, just in case
 	CLR DDR1				; FE04. 7F 00 00	; PA as input (just in case)
 	CLR IOR2				; FE07. 7F 00 03	; will keep IOSEL, SC_TX and SC_CL low
-	LDAA #$14				; FE0A. 86 14		; P22 (SC_CL) and P24 (SC_TX) will be output for PB control and audio
+	LDAA #%00010100			; FE0A. 86 14		; P22 (SC_CL) and P24 (SC_TX) will be output for PB control and audio
 	STAA DDR2				; FE0C. 97 01		; update DDR2
 ; assume correct mode
 	CLR $08					; FE0E. 7F 00 08	; disable all interrupt sources, just in case
@@ -35,10 +35,10 @@ reset:
 
 ; *** main loop ***
 key:
-; check whether a key is pressed
+; check whether a different key is pressed
 			LDAB IOR1		; FE1B. D6 02		; read PA
 			CMPB last		; FE1D. D1 80		; compare to previous
-			BEQ key			; FE1F. 26 FA		; wait for any key change
+			BEQ key			; FE1F. 27 FA		; wait for any key change EEEK
 new:
 ; compute frequency
 		STAB last			; FE21. D7 80		; register current key
