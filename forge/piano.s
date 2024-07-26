@@ -3,7 +3,7 @@
 ; PA7 + PA0-PA6 = C5-B5
 ; hold next button for Sharp, previous for Flat (e.g. PA0+PA1 = C#4) 
 ; (c) 2024 Carlos J. Santisteban
-; last modified 20240726-0035
+; last modified 20240727-1002
 
 	* = $FE00				; make that $1000 for downloadable version
 
@@ -15,7 +15,7 @@
 
 ; memory definitions
 	last	= $80			; last PA pattern
-	buffer	= last+1		; cycle value for X
+	count	= last+1		; cycle value for X
 
 reset:
 ; basic 6301/6303 init
@@ -26,56 +26,56 @@ reset:
 	LDAA #$14				; FE0A. 86 14		; P22 (SC_CL) and P24 (SC_TX) will be output for PB control and audio
 	STAA DDR2				; FE0C. 97 01		; update DDR2
 ; assume correct mode
-	CLR $08					; FE1F. 7F 00 08	; disable all interrupt sources, just in case
-	CLR $11					; FE22. 7F 00 11	; disable serial as well
-	CLR $10					; FE25. 7F 00 10
+	CLR $08					; FE0E. 7F 00 08	; disable all interrupt sources, just in case
+	CLR $11					; FE11. 7F 00 11	; disable serial as well
+	CLR $10					; FE14. 7F 00 10
 ; don't care about picoVDU screen
-	CLR last				; FE28. 7F 00 80	; initial value (no key)
-	CLRA					; FE2B. 4F			; for good measure
+	CLR last				; FE17. 7F 00 80	; initial value (no key)
+	CLRA					; FE1A. 4F			; for good measure
 
 ; *** main loop ***
 key:
 ; check whether a key is pressed
-			LDAB IOR1		; FE2C. D6 02		; read PA
-			CMPB last		; FE2E. D1 80		; compare to previous
-			BEQ key			; FE30. 26 FA		; wait for any key change
+			LDAB IOR1		; FE1B. D6 02		; read PA
+			CMPB last		; FE1D. D1 80		; compare to previous
+			BEQ key			; FE1F. 26 FA		; wait for any key change
 new:
 ; compute frequency
-		STAB last			; FE32. D7 80		; register current key
-		LDX #index			; FE34. CE FE 69	; get offset table base
-		ABX					; FE37. 3A			; get pointer to selected key
-		LDAB 0, X			; FE38. E6 00		; this is the required offset
-		LDX #tx				; FE3A. CE FF 69	; count values table base
-		ABX					; FE3D. 3A			; point to selected note
-		LDX 0, X			; FE3E. EE 00		; and this is the 16-bit loop value
-		STX buffer			; FE40. DF 81		; store for later
-		BEQ key				; FE42. 27 E8		; only if it's a valid note
+		STAB last			; FE21. D7 80		; register current key
+		LDX #index			; FE23. CE FE 57	; get offset table base
+		ABX					; FE26. 3A			; get pointer to selected key
+		LDAB 0, X			; FE27. E6 00		; this is the required offset
+		LDX #tx				; FE29. CE FF 57	; count values table base
+		ABX					; FE2C. 3A			; point to selected note
+		LDX 0, X			; FE2D. EE 00		; and this is the 16-bit loop value
+		STX count			; FE2F. DF 81		; store for later
+		BEQ key				; FE31. 27 E8		; only if it's a valid note
 ; play the note!
-	OIM #$10, IOR2			; FE44. 72 10 03	; set SC_TX hi to enable sound
+	OIM #%00010000, IOR2	; FE33. 72 10 03	; set SC_TX hi to enable sound
 cycle:
 ; reload X from temp
-	LDX buffer				; FE47. DE 81		; get cached loop value (minus 40t overhead) (4)
+	LDX count				; FE36. DE 81		; get cached loop value (minus 40t overhead) (4)
 bloop:
-			DEX				; FE49. 09
-			BNE bloop		; FE4A. 26 FD		; delay loop (4X)
+			DEX				; FE38. 09
+			BNE bloop		; FE39. 26 FD		; delay loop (4X)
 ; toggle speaker output
-		EORA #%10000000			; FE4C. 88 80		; toggle PB7 (2)
-		STAA IOR1				; FE4E. 97 02		; store pattern into PA (3)
-		LDAB #$FF				; FE50. C6 FF		; all bits output... EEEEEK (2)
-		STAB DDR1				; FE52. D7 00		; ...for a while (3)
-		EIM #%00000100, IOR2	; FE54. 75 04 03	; pulse SC_TX in order to latch PA into PB (6+6)
-		EIM #%00000100, IOR2	; FE57. 75 04 03
-		CLR DDR1				; FE5A. 7F 00 00	; PA back to input for lower power (5)
+		EORA #%10000000			; FE3B. 88 80		; toggle PB7 (2)
+		STAA IOR1				; FE3D. 97 02		; store pattern into PA (3)
+		LDAB #$FF				; FE3F. C6 FF		; all bits output... EEEEEK (2)
+		STAB DDR1				; FE41. D7 00		; ...for a while (3)
+		EIM #%00000100, IOR2	; FE43. 75 04 03	; pulse SC_CL in order to latch PA into PB (6+6)
+		EIM #%00000100, IOR2	; FE46. 75 04 03
+		CLR DDR1				; FE49. 7F 00 00	; PA back to input for lower power (5)
 ; check whether key has changed
-		LDAB IOR1			; FE5D. D6 02		; check PA (3)
-		CMPB last			; FE5F. D1 80		; any change? (3)
-		BEQ cycle			; FE61. 27 E4		; otherwise keep playing (3)
+		LDAB IOR1			; FE4C. D6 02		; check PA (3)
+		CMPB last			; FE4E. D1 80		; any change? (3)
+		BEQ cycle			; FE50. 27 E4		; otherwise keep playing (3)
 ; if so, back to key process
-	AIM #%11101111, IOR2	; FE63. 71 EF 03	; clear SC_TX to disable sound
-	JMP new					; FE66. 7E FE 32
+	AIM #%11101111, IOR2	; FE52. 71 EF 03	; clear SC_TX to disable sound
+	BRA new					; FE55. 20 CA
 
 ; *** data ***
-; offset for every valid note into 16-bit tables ($FE69)
+; offset for every valid note into 16-bit tables ($FE57)
 index:
 	.byt	0				; 00		; [no key] = REST
 	.byt	c4-tx			; 02		; [1] = C4
@@ -122,7 +122,7 @@ index:
 	.byt	as5-tx			; 2E		; [32+64+128] = A#5
 	.dsb	31, 0			; 00...		; [225...255] not valid
 
-; selected X values for notes, MUST be BIG-endian! ($FF69)
+; selected X values for notes, MUST be BIG-endian! ($FF57)
 tx:
 	.word	0				; 00 00		; * null note *
 c4:
