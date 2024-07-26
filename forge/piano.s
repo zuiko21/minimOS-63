@@ -59,13 +59,13 @@ bloop:
 			DEX				; FE38. 09
 			BNE bloop		; FE39. 26 FD		; delay loop (4X)
 ; toggle speaker output
-		EORA #%10000000			; FE3B. 88 80		; toggle PB7 (2)
-		STAA IOR1				; FE3D. 97 02		; store pattern into PA (3)
-		LDAB #$FF				; FE3F. C6 FF		; all bits output... EEEEEK (2)
-		STAB DDR1				; FE41. D7 00		; ...for a while (3)
-		EIM #%00000100, IOR2	; FE43. 75 04 03	; pulse SC_CL in order to latch PA into PB (6+6)
-		EIM #%00000100, IOR2	; FE46. 75 04 03
-		CLR DDR1				; FE49. 7F 00 00	; PA back to input for lower power (5)
+		STAA IOR1				; FE3B. 97 02		; store pattern into PA (3)
+		LDAB #$FF				; FE3D. C6 FF		; all bits output... EEEEEK (2)
+		STAB DDR1				; FE3F. D7 00		; ...for a while (3)
+		EIM #%00000100, IOR2	; FE41. 75 04 03	; pulse SC_CL in order to latch PA into PB (6+6)
+		EIM #%00000100, IOR2	; FE44. 75 04 03
+		CLR DDR1				; FE47. 7F 00 00	; PA back to input for lower power (5)
+		EORA #%10000000			; FE4A. 88 80		; toggle PB7 (2)
 ; check whether key has changed
 		LDAB IOR1			; FE4C. D6 02		; check PA (3)
 		CMPB last			; FE4E. D1 80		; any change? (3)
